@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dominion — a browser god game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="land" class="panel"><b id="landname">—</b><span id="clock">Day 1</span></div>
+  <div id="topbar" class="panel">
+    <div class="stat"><span>Prayer Power</span><b id="prayer">0</b><div id="prayerbar" class="bar"><i></i></div></div>
+    <div class="stat"><span>Alignment</span><b id="aligntext">Neutral</b><div id="alignbar" class="bar"><i></i></div></div>
+    <div class="stat"><span>Tribute</span><b id="tribute">0</b></div>
+    <div class="stat"><span>Influence</span><b id="influence">0</b></div>
+  </div>
+  <div id="townpanel" class="panel">
+    <h3 id="townname">Town</h3>
+    <div class="row"><span>Population</span><b id="pop">0 / 0</b></div>
+    <div class="row"><span>Food</span><b id="food">0</b></div>
+    <div class="row"><span>Wood</span><b id="wood">0</b></div>
+    <div class="row"><span>Ore</span><b id="ore">0</b></div>
+    <div class="row"><span>Impressiveness</span><b id="impress">0</b></div>
+    <div class="jobs" id="jobs"></div>
+    <label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" id="autojobs" checked> Auto-assign jobs</label>
+  </div>
+  <div id="objectives" class="panel"><h3>Objectives</h3><ul id="objlist"></ul><div id="enemytowns"></div></div>
+  <div id="messages"></div>
+  <div id="tooltip"></div>
+  <div id="buildinginfo" class="panel"></div>
+  <div id="bottombar">
+    <div id="subpanel" class="panel"></div>
+    <div id="tabs" class="panel" style="padding:6px">
+      <button data-tab="build">Build<span class="key">B</span></button>
+      <button data-tab="miracles">Miracles<span class="key">M</span></button>
+      <button data-tab="creature">Creature<span class="key">C</span></button>
+      <button data-tab="army">Army<span class="key">T</span></button>
+      <button data-tab="tribute">Tribute<span class="key">U</span></button>
+      <button data-tab="menu">Menu<span class="key">Esc</span></button>
+    </div>
+  </div>
+  <div id="help" class="panel hidden">
+    <h3>Controls <small>(H to hide)</small></h3>
+    <ul>
+      <li><b>Left-drag</b> on land: pan. <b>Right-drag</b>: rotate. <b>Wheel</b>: zoom. WASD/QE too.</li>
+      <li><b>Click</b> a villager, tree, rock or heap to pick it up. Release to drop; flick to throw.</li>
+      <li>Drop a villager on a field, house, altar, armoury, construction site, tree or rock to give them that job.</li>
+      <li>Drop wood/ore/food on your temple to store it. Drop food on your creature to feed it.</li>
+      <li><b>Stroke</b> your creature (hold and move) to reward, <b>tap</b> it to punish.</li>
+      <li>Miracles: number keys or the Miracles tab, then click. Hold Shift to keep casting.</li>
+      <li><b>R</b> rotates a building ghost. <b>Right-click</b> cancels. <b>Space</b> centres on your temple. <b>F</b> finds your creature.</li>
+      <li><b>F5</b> quick save, <b>F9</b> quick load. <b>P</b> pause.</li>
+    </ul>
+  </div>
+  <button id="helpbtn">? Help (H)</button>
+  <div id="fps"></div>
+  <div id="overlay">
+    <div class="box panel" id="overlaybox"></div>
+  </div>
+  <div id="loading">Shaping the land…</div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="src/util.js"></script>
+<script src="src/data.js"></script>
+<script src="src/terrain.js"></script>
+<script src="src/gfx.js"></script>
+<script src="src/world.js"></script>
+<script src="src/camera.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/people.js"></script>
+<script src="src/buildings.js"></script>
+<script src="src/towns.js"></script>
+<script src="src/miracles.js"></script>
+<script src="src/creature.js"></script>
+<script src="src/army.js"></script>
+<script src="src/hand.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
