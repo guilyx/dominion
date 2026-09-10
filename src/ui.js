@@ -58,6 +58,25 @@
       this.adviceT = 16;
       BW.audio.play('ui');
     }
+    // Speech bubble over the player's creature when it has something to say.
+    drawSpeech() {
+      const G = this.G; const c = G.playerCreature(); const cam = this.game.gfx.camera;
+      let el = this.speechEl; if (!el) { el = this.speechEl = document.createElement('div'); el.className = 'speech'; $('bars').parentNode.appendChild(el); }
+      if (!c || !c.speak) { el.style.display = 'none'; return; }
+      const v = new THREE.Vector3(c.x, c.y + c.size * 4.6, c.z).project(cam);
+      if (v.z > 1) { el.style.display = 'none'; return; }
+      el.style.display = 'block'; el.textContent = c.speak; el.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - v.y) / 2 * innerHeight - 14) + 'px';
+    }
+    drawTutorial() {
+      const G = this.G; const el = $('tutorial');
+      const show = G.landIndex === 0 && !this.game.profile.custom && !(G.god.stats.tutorialDone);
+      el.classList.toggle('hidden', !show); if (!show) return;
+      const st = G.god.stats;
+      const steps = [['Pick up a villager (click one)', st.picked > 0], ['Drop a villager on a field to make a farmer', st.assigned > 0], ['Cast Water on your crops (press 1, click a field)', st.casts > 0], ['Build a house (B, then click the ground)', st.placed > 0], ['Stroke your creature (hold and move over it)', st.stroked > 0], ['Open the Tribute tab (U) and unlock something', Object.keys(G.god.unlocks).length > 0]];
+      const html = steps.map(([t, d]) => `<li class="${d ? 'done' : ''}">${t}</li>`).join('');
+      if (html !== this.tutHtml) { this.tutHtml = html; $('tutlist').innerHTML = html; }
+      if (steps.every((s) => s[1])) { st.tutorialDone = 1; BW.grantTribute(G, 1, 'First steps complete'); G.say('You know the basics. Grow, impress, conquer.', 'good'); }
+    }
     // Health bars over creatures that are hurt or fighting.
     drawBars() {
       const G = this.G, box = $('bars'); const cam = this.game.gfx.camera; const v = new THREE.Vector3();
@@ -73,6 +92,11 @@
       });
     }
     get G() { return this.game.G; }
+    icon(key, build) {
+      this.icons = this.icons || {};
+      if (!this.icons[key]) { try { this.icons[key] = BW.renderIcon(build(), 96); } catch (e) { this.icons[key] = ''; } }
+      return this.icons[key];
+    }
     get hand() { return this.game.hand; }
 
     toggleHelp() { $('help').classList.toggle('hidden'); }
@@ -98,7 +122,8 @@
         const town = G.playerTown();
         p.innerHTML = `<h3>Build <small>— click an item, then click the ground. R rotates, Shift keeps placing.</small></h3><div class="items">` + BW.BUILD_ORDER.map((k) => {
           const d = BW.BUILDINGS[k]; const locked = !G.hasUnlock(d.unlock); const can = town && G.canAfford(town, d.cost);
-          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}"><b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
+          const img = this.icon('b_' + k, () => { const mm = BW.buildingMesh({ id: -1, kind: k, owner: 0 }, 0, 0); const sc = mm.getObjectByName('scaffold'); if (sc) sc.visible = false; return mm; });
+          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}">${img ? `<img src="${img}" alt="">` : ''}<b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
         }).join('') + `</div><div class="desc" id="tabdesc">Hover an item for details.</div>`;
         p.querySelectorAll('.item').forEach((el) => {
           el.addEventListener('mouseenter', () => { $('tabdesc').textContent = BW.BUILDINGS[el.dataset.kind].desc; });
@@ -107,7 +132,8 @@
       } else if (this.tab === 'miracles') {
         p.innerHTML = `<h3>Miracles <small>— pick one, then click inside your influence. Shift keeps casting.</small></h3><div class="items">` + BW.MIRACLE_ORDER.map((k) => {
           const d = BW.MIRACLES[k]; const locked = !G.hasUnlock(d.unlock); const can = G.god.prayer >= d.cost;
-          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'miracle' && mode.kind === k ? 'active' : ''}" data-kind="${k}" style="border-color:#${d.color.toString(16).padStart(6, '0')}55"><span class="key">${d.key}</span><b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${d.cost} prayer · ${d.align > 0 ? 'good' : d.align < 0 ? 'evil' : 'neutral'}</span>${locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
+          const hex = '#' + d.color.toString(16).padStart(6, '0');
+          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'miracle' && mode.kind === k ? 'active' : ''}" data-kind="${k}" style="border-color:${hex}55"><span class="key">${d.key}</span><i class="miracle-orb" style="--orb:${hex}"></i><b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${d.cost} prayer · ${d.align > 0 ? 'good' : d.align < 0 ? 'evil' : 'neutral'}</span>${locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
         }).join('') + `</div><div class="desc" id="tabdesc">Hover a miracle for details.</div>`;
         p.querySelectorAll('.item').forEach((el) => {
           el.addEventListener('mouseenter', () => { $('tabdesc').textContent = BW.MIRACLES[el.dataset.kind].desc; });
@@ -294,11 +320,11 @@
       else if (hand.held) tip = 'Holding: ' + this.tooltipFor(hand.held).split('\n')[0] + (hand.hoverEnt ? '\nDrop on: ' + this.tooltipFor(hand.hoverEnt).split('\n')[0] : '');
       if (tip) { this.tooltip.style.display = 'block'; this.tooltip.textContent = tip; this.tooltip.style.left = (BW.input.mx + 18) + 'px'; this.tooltip.style.top = (BW.input.my + 18) + 'px'; }
       else this.tooltip.style.display = 'none';
-      this.drawBars();
+      this.drawBars(); this.drawSpeech();
       if (this.adviceT > 0) { this.adviceT -= dt; if (this.adviceT <= 0) { $('adv-good').classList.remove('show'); $('adv-evil').classList.remove('show'); } }
       if (this.t < 250) return;
       this.lastRefresh = nowMs;
-      this.drawMinimap();
+      this.drawMinimap(); this.drawTutorial();
       const god = G.god;
       $('prayer').textContent = `${Math.floor(god.prayer)} / ${Math.floor(god.maxPrayer)}`;
       $('prayerbar').firstElementChild.style.width = (god.prayer / god.maxPrayer * 100) + '%';
@@ -335,13 +361,14 @@
     hideOverlay() { $('overlay').classList.add('hidden'); }
     mainMenu() {
       const g = this.game;
+      $('ui').classList.add('photo');
       const hasSave = g.hasSave();
       let species = 'ape';
       const opts = { seed: String(Math.floor(Math.random() * 90000) + 10000), size: '500', tribes: '3' };
       const render = () => {
         this.overlay(`<h1>DOMINION</h1><h2>A god game for the browser</h2>
           <p>Rule a tribe from above. Nurture or terrorise your villagers, raise a colossal creature, and win the island by awe or by war.</p>
-          <div><small>Choose your creature</small><div class="species">${Object.entries(BW.SPECIES).map(([k, s]) => `<div class="item ${k === species ? 'active' : ''}" data-sp="${k}"><b>${s.name}</b><small>${esc(s.desc)}</small></div>`).join('')}</div></div>
+          <div><small>Choose your creature</small><div class="species">${Object.entries(BW.SPECIES).map(([k, s]) => { const img = this.icon('c_' + k, () => BW.creatureMesh(k, 0)); return `<div class="item ${k === species ? 'active' : ''}" data-sp="${k}">${img ? `<img src="${img}" alt="">` : ''}<b>${s.name}</b><small>${esc(s.desc)}</small></div>`; }).join('')}</div></div>
           <div class="menu"><button id="mm-new">New campaign</button><button id="mm-continue" ${hasSave ? '' : 'disabled'}>Continue</button><button id="mm-skirmish">Skirmish</button><button id="mm-help">Controls</button></div>
           <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
           <p class="muted" style="font-size:12px">Tip: this runs entirely in your browser. Saves live in localStorage.</p>`);
@@ -358,7 +385,7 @@
       this.overlay(`<h1 style="font-size:30px">${esc(land.name)}</h1><h2>${land.custom ? 'Skirmish · seed ' + land.seed : 'Land ' + (this.game.profile.landIndex + 1) + ' of ' + BW.LANDS.length}</h2>
         <p>${esc(land.intro)}</p><p><b>Objectives</b><br>${land.objectives.map(esc).join('<br>')}</p>
         <div class="menu"><button id="li-begin">Begin</button></div>`);
-      $('li-begin').onclick = () => { this.hideOverlay(); onBegin(); };
+      $('li-begin').onclick = () => { this.hideOverlay(); $('ui').classList.remove('photo'); onBegin(); };
     }
     victory(stats, isLast, onNext) {
       this.overlay(`<h1 style="font-size:34px">${isLast ? 'THE ISLANDS ARE YOURS' : 'LAND CONQUERED'}</h1><h2>${isLast ? 'Every tribe worships you. Campaign complete.' : 'The tribes of this land now worship you.'}</h2>

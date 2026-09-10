@@ -20,6 +20,8 @@
       this.ghost = null; this.ghostRot = 0;
       this.ring = BW.groundRing(10, 0xffffff); this.ring.visible = false; G.gfx.world.add(this.ring);
       this.selRing = BW.groundRing(4, 0xffff66); this.selRing.visible = false; G.gfx.world.add(this.selRing);
+      this.hoverRing = BW.groundRing(1.5, 0xffffff, 40); this.hoverRing.visible = false; G.gfx.world.add(this.hoverRing);
+      this.smooth = { rx: 0, ry: 0 };
       this.downPos = null; this.downT = 0; this.rightDown = null;
       this.lineStart = null;
       this.lineMesh = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe9a0 })); this.lineMesh.visible = false; G.gfx.world.add(this.lineMesh);
@@ -27,7 +29,7 @@
       this.gcanvas = document.getElementById('gesture');
       input.onDown = (e) => this.onDown(e);
       input.onUp = (e) => this.onUp(e);
-      input.onMove = () => { if (this.gesture) { const last = this.gesture[this.gesture.length - 1]; if (Math.hypot(input.mx - last.x, input.my - last.y) > 3) this.gesture.push({ x: input.mx, y: input.my }); } };
+      input.onMove = (e) => { if (this.gesture) { const last = this.gesture[this.gesture.length - 1]; if (Math.hypot(input.mx - last.x, input.my - last.y) > 3) this.gesture.push({ x: input.mx, y: input.my }); } if (this.touch && e) this.touch.moved += Math.hypot(e.movementX || 0, e.movementY || 0); };
     }
 
     // ---------------------------------------------------------- gestures
@@ -111,19 +113,26 @@
 
     pickable(e) { return e && (e.type === 'person' || e.type === 'item' || e.type === 'tree' || e.type === 'rock'); }
 
+    // Pick by the pointer ray's distance to each thing's body, so hovering a
+    // creature's head or a tree's canopy counts, not just the ground at its feet.
     findHover() {
       const G = this.G, h = this.hover; if (!h) return null;
-      const scale = clamp(this.camera.dist / 60, 0.8, 2.5);
+      const ray = this.camera.pointerRay(input.mx, input.my);
+      const o = ray.origin, d = ray.direction; const tmp = this._tmp || (this._tmp = new THREE.Vector3());
+      const rayDist = (x, y, z) => { tmp.set(x - o.x, y - o.y, z - o.z); const t = tmp.dot(d); if (t < 0) return 1e9; return Math.sqrt(Math.max(0, tmp.lengthSq() - t * t)); };
+      const scale = clamp(this.camera.dist / 60, 0.9, 2.5);
       let best = null, bd = 1e9;
-      const consider = (e, r) => { const d = dist(e.x, e.z, h.x, h.z); if (d < r * scale && d < bd) { bd = d; best = e; } };
-      for (const c of G.creatures) consider(c, 2.2 * c.size + 0.5);
-      for (const p of G.people) if (!p.inside && !p.held) consider(p, 1.3);
-      for (const it of G.items) if (!it.held) consider(it, 1.4);
-      for (const t of G.trees) if (!t.burnt) consider(t, 1.6);
-      for (const r of G.rocks) consider(r, 1.7);
+      const consider = (e, x, y, z, r) => { const dd = rayDist(x, y, z) / r; if (dd < 1 && dd < bd) { bd = dd; best = e; } };
+      for (const c of G.creatures) consider(c, c.x, c.y + c.size * 1.7, c.z, c.size * 2.3);
+      const near = G.grids.person.inRadius(h.x, h.z, 8 * scale, (p) => !p.inside && !p.held);
+      for (const p of near) consider(p, p.x, p.y + 0.9, p.z, 1.0 * scale);
+      for (const it of G.grids.item.inRadius(h.x, h.z, 8 * scale, (i) => !i.held)) consider(it, it.x, it.y + 0.4, it.z, 1.2 * scale);
+      for (const t of G.grids.tree.inRadius(h.x, h.z, 10 * scale, (t) => !t.burnt)) consider(t, t.x, t.y + 2.5, t.z, 1.9 * scale);
+      for (const r of G.grids.rock.inRadius(h.x, h.z, 8 * scale)) consider(r, r.x, r.y + 0.8, r.z, 1.5 * scale);
       if (best) return best;
-      const b = G.buildingAt(h.x, h.z, 0.5);
-      return b || null;
+      let bb = G.buildingAt(h.x, h.z, 0.5);
+      if (!bb) { let bbd = 1e9; for (const b of G.buildings) { const def = BW.BUILDINGS[b.kind]; const hh = BW.BUILDING_HEIGHT[b.kind] || 3; const dd = rayDist(b.x, b.y + hh * 0.5, b.z) / (Math.max(def.w, def.d) * 0.55 + 0.5); if (dd < 1 && dd < bbd) { bbd = dd; bb = b; } } }
+      return bb || null;
     }
 
     update(dt) {
@@ -143,35 +152,54 @@
       } else this.lineMesh.visible = false;
       // Stroke detection
       if (this.touch && this.hover) {
-        this.touch.moved += Math.hypot(input.dx, input.dy);
-        if (this.touch.moved > 60 && !this.touch.stroked && performance.now() - this.touch.t0 > 250) { this.touch.stroked = true; const c = G.ents.get(this.touch.id); if (c && !c.dead) BW.creatureFeedback(G, c, +1); }
+        if (this.touch.moved > 60 && !this.touch.stroked && performance.now() - this.touch.t0 > 250) { this.touch.stroked = true; const c = G.ents.get(this.touch.id); if (c && !c.dead) { BW.creatureFeedback(G, c, +1); G.god.stats.stroked = (G.god.stats.stroked || 0) + 1; } }
       }
       // Mesh
       const m = this.mesh;
+      const time = performance.now() / 1000;
       if (this.hover) {
         m.visible = true;
         let lift = this.held ? 3.2 : 2.2;
         const hb = G.buildingAt(this.hover.x, this.hover.z, 0.5); if (hb) lift += (BW.BUILDING_HEIGHT[hb.kind] || 3) * (hb.built ? 1 : 0.15 + 0.85 * hb.progress);
         if (this.hoverEnt && this.hoverEnt.type === 'creature') lift += this.hoverEnt.size * 3.5;
         if (this.hoverEnt && this.hoverEnt.type === 'tree') lift += 3;
+        lift += Math.sin(time * 2.2) * 0.12; // idle hover
         m.position.set(this.hover.x, this.hover.y + lift, this.hover.z);
-        m.rotation.set(0, this.camera.yaw + Math.PI, 0);
-        m.rotation.x = -0.35;
+        // Tilt with pointer motion, smoothed, so the hand banks as it moves.
+        const v = this.velocity(); const yaw = this.camera.yaw + Math.PI;
+        const fwd = Math.sin(yaw) * v.x + Math.cos(yaw) * v.z, side = Math.cos(yaw) * v.x - Math.sin(yaw) * v.z;
+        this.smooth.rx += ((-0.35 - clamp(fwd, -30, 30) * 0.012) - this.smooth.rx) * Math.min(1, dt * 8);
+        this.smooth.ry += ((clamp(side, -30, 30) * 0.012) - this.smooth.ry) * Math.min(1, dt * 8);
+        m.rotation.set(this.smooth.rx, yaw, this.smooth.ry);
         const ud = m.userData;
         const grab = !!this.held || !!this.touch;
-        const point = !!this.mode;
+        const point = !!this.mode && this.mode.type !== 'send';
+        const evil = G.god.alignment < -0.4, good = G.god.alignment > 0.4;
         for (let i = 0; i < ud.fingers.length; i++) {
-          const f = ud.fingers[i];
-          const target = grab ? -1.3 : point ? (i === 0 ? 0 : -1.2) : 0;
-          f.rotation.x += (target - f.rotation.x) * Math.min(1, dt * 14);
-          f.children[1].visible = G.god.alignment < -0.4;
+          const f = ud.fingers[i]; const kn = f.getObjectByName('knuckle');
+          let base = Math.sin(time * 1.7 + i * 0.9) * 0.06, knuckle = -0.18 + Math.sin(time * 1.3 + i) * 0.05;
+          if (grab) { base = -1.05; knuckle = -1.25; }
+          else if (point) { if (i === 1) { base = 0.05; knuckle = -0.05; } else { base = -1.35; knuckle = -1.4; } }
+          else if (this.touch) { base = -0.3; knuckle = -0.4; }
+          f.rotation.x += (base - f.rotation.x) * Math.min(1, dt * 14);
+          kn.rotation.x += (knuckle - kn.rotation.x) * Math.min(1, dt * 14);
+          kn.getObjectByName('claw').visible = evil;
         }
-        ud.thumb.rotation.x += ((grab ? -0.9 : 0) - ud.thumb.rotation.x) * Math.min(1, dt * 14);
-        const al = G.god.alignment;
-        ud.mat.color.set(al < -0.4 ? 0x6a2a2a : al > 0.4 ? 0xfff8ec : 0xf1e4d0);
-        ud.mat.emissive.set(al < -0.4 ? 0x330000 : al > 0.4 ? 0x443311 : 0x221100);
-        ud.glow.intensity = this.mode && this.mode.type === 'miracle' ? 1.5 : 0;
-        if (this.mode && this.mode.type === 'miracle') ud.glow.color.set(BW.MIRACLES[this.mode.kind].color);
+        ud.thumb.rotation.x += ((grab ? -0.8 : point ? -0.5 : Math.sin(time * 1.5) * 0.05) - ud.thumb.rotation.x) * Math.min(1, dt * 14);
+        ud.mat.color.set(evil ? 0x6a2a2a : good ? 0xfff8ec : 0xf1e4d0);
+        ud.mat.emissive.set(evil ? 0x3a0000 : good ? 0x4a3a18 : 0x221100);
+        ud.sleeveMat.color.set(evil ? 0xff3020 : good ? 0xfff6d0 : 0xfff1c0);
+        ud.sleeveMat.opacity = (evil ? 0.09 : good ? 0.09 : 0.055) + Math.sin(time * 3) * 0.01;
+        m.scale.setScalar(1.5 + this.camera.dist / 95);
+        ud.sleeve.rotation.z = Math.sin(time * 0.9) * 0.05;
+        const casting = this.mode && this.mode.type === 'miracle';
+        ud.orb.visible = casting; ud.ring.visible = casting;
+        if (casting) { const col = BW.MIRACLES[this.mode.kind].color; ud.orbMat.color.set(col); ud.orb.scale.setScalar(1 + Math.sin(time * 6) * 0.12); ud.ring.rotation.z = time * 2; ud.glow.color.set(col); }
+        ud.glow.intensity = casting ? 1.6 : good ? 0.5 : 0;
+        if (good) ud.glow.color.set(0xffe0a0);
+        // Sparkle trail when the hand sweeps quickly.
+        const sp = Math.hypot(v.x, v.z);
+        if (sp > 18 && BW.rand() < dt * 30) G.particles.spawn(m.position.x + (BW.rand() - 0.5), m.position.y - 0.5, m.position.z + (BW.rand() - 0.5), 0, 0.5, 0, 0.5, evil ? 0xff4422 : 0xffe9a0, 1.4);
         if (this.held) { const e = this.held; e.x = this.hover.x; e.z = this.hover.z; e.y = this.hover.y + 1.6; if (e.type === 'person') e.dir += dt * 3; }
         if (this.ghost) {
           this.ghost.position.set(this.hover.x, this.hover.y, this.hover.z); this.ghost.rotation.y = this.ghostRot;
@@ -184,6 +212,14 @@
         }
         if (this.ring.visible) BW.updateRing(this.ring, this.hover.x, this.hover.z, BW.MIRACLES[this.mode.kind].radius, G.terrain);
       } else m.visible = false;
+      // Hover highlight ring
+      const he = this.hoverEnt;
+      if (he && !this.held && !this.mode && (this.pickable(he) || he.type === 'creature' || he.type === 'building')) {
+        const r = he.type === 'building' ? BW.BUILDINGS[he.kind].w / 2 + 0.8 : he.type === 'creature' ? he.size * 2 : he.type === 'person' ? 1.1 : 1.6;
+        BW.updateRing(this.hoverRing, he.x, he.z, r, G.terrain, 0.25); this.hoverRing.visible = true;
+        this.hoverRing.material.opacity = 0.55 + Math.sin(time * 6) * 0.25;
+        this.hoverRing.material.color.set(he.owner !== undefined && he.owner !== 0 && he.type !== 'tree' ? 0xff9a7a : 0xfff4d0);
+      } else this.hoverRing.visible = false;
       // Selected platoon ring
       const pl = G.ents.get(G.selectedPlatoon);
       if (pl && this.mode && this.mode.type === 'army') { this.selRing.visible = true; BW.updateRing(this.selRing, pl.x, pl.z, 4, G.terrain); }
@@ -207,7 +243,7 @@
         if (input.keys.ControlLeft || input.keys.ControlRight) { this.gesture = [{ x: input.mx, y: input.my }]; return; }
         if (this.mode) {
           if (this.mode.type === 'build') { if (BW.BUILDINGS[this.mode.kind].line) { this.lineStart = { x: h.x, y: h.y, z: h.z }; return; } return this.tryBuild(); }
-          if (this.mode.type === 'miracle') { if (BW.castMiracle(G, this.mode.kind, h.x, h.z, 0)) { if (!input.keys.ShiftLeft) this.setMode(null); } return; }
+          if (this.mode.type === 'miracle') { if (BW.castMiracle(G, this.mode.kind, h.x, h.z, 0)) { G.particles.burst(h.x, h.y + 1, h.z, 25, 5, 0.8, BW.MIRACLES[this.mode.kind].color, 2, 1, 3); if (!input.keys.ShiftLeft) this.setMode(null); } return; }
           if (this.mode.type === 'send') { const c = G.playerCreature(); if (c) { c.sendGoal = { x: h.x, z: h.z }; c.leash = 'free'; c.state = 'going'; G.say('Creature is on its way.', 'info'); } this.setMode(null); return; }
           if (this.mode.type === 'army') { const pl = G.ents.get(G.selectedPlatoon); if (pl) BW.commandPlatoon(G, pl, h.x, h.z, ent); if (!input.keys.ShiftLeft) this.setMode(null); return; }
         }
@@ -273,6 +309,7 @@
       if (ent.type === 'person') { ent.state = 'idle'; ent.fear = 0; if (ent.inside) { const h = G.ents.get(ent.workId); if (h) h.garrison = Math.max(0, h.garrison - 1); ent.inside = false; } }
       this.held = ent;
       this.hist.length = 0;
+      G.god.stats.picked = (G.god.stats.picked || 0) + 1;
       BW.audio.play('pick');
     }
 
@@ -324,12 +361,13 @@
             else if (b.kind === 'armory') { this.recruit(e, b); }
             else if (b.kind === 'center') { if (e.carry) { G.deposit(pt, e.carry.kind, e.carry.amount); e.carry = null; } e.job = 'idle'; e.workId = 0; }
             if (e.platoon && e.job !== 'soldier') { const pl = G.ents.get(e.platoon); if (pl) { const i = pl.members.indexOf(e.id); if (i >= 0) pl.members.splice(i, 1); if (!pl.members.length) G.remove(pl); } e.platoon = 0; e.maxHealth = 30; }
-            G.say(`Villager is now a ${BW.JOB_NAMES[e.job]}.`, 'info');
+            G.say(`${e.name} is now a ${BW.JOB_NAMES[e.job]}.`, 'info');
+            G.god.stats.assigned = (G.god.stats.assigned || 0) + 1;
           } else {
             const tr = G.nearest(G.trees, h.x, h.z, 3.5, (t) => !t.burnt && t.wood > 0);
             const rk = G.nearest(G.rocks, h.x, h.z, 3.5);
-            if (tr) { e.job = 'forester'; e.workId = tr.id; G.say('Villager is now a Forester.', 'info'); }
-            else if (rk) { e.job = 'miner'; e.workId = rk.id; G.say('Villager is now a Miner.', 'info'); }
+            if (tr) { e.job = 'forester'; e.workId = tr.id; G.say(`${e.name} is now a Forester.`, 'info'); G.god.stats.assigned = (G.god.stats.assigned || 0) + 1; }
+            else if (rk) { e.job = 'miner'; e.workId = rk.id; G.say(`${e.name} is now a Miner.`, 'info'); G.god.stats.assigned = (G.god.stats.assigned || 0) + 1; }
           }
           e.state = 'idle';
         }
@@ -354,6 +392,7 @@
       G.pay(town, def.cost);
       const placed = BW.placeBuilding(G, kind, town, h.x, h.z, this.ghostRot);
       if (kind === 'center') placed.newTown = true;
+      G.god.stats.placed = (G.god.stats.placed || 0) + 1;
       BW.audio.play('place');
       G.say(`${def.name} site placed. Builders will get to work (drop villagers on it to speed up).`, 'info');
       if (!input.keys.ShiftLeft) this.setMode(null);

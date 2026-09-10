@@ -126,12 +126,11 @@
       this.colorVersion = 1;
       this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
       this.group = new THREE.Group();
-      const wgeo = new THREE.PlaneGeometry(this.size * 3, this.size * 3, 1, 1);
-      wgeo.rotateX(-Math.PI / 2);
-      this.waterMat = new THREE.MeshPhongMaterial({ color: 0x2a6fa8, transparent: true, opacity: 0.78, shininess: 90, specular: 0x88bbff });
-      this.water = new THREE.Mesh(wgeo, this.waterMat);
-      this.water.name = 'water';
+      this.water = BW.makeWater(this.size);
       this.group.add(this.water);
+      // A flat far plane beyond the wave mesh so the horizon never shows through.
+      const fgeo = new THREE.PlaneGeometry(this.size * 6, this.size * 6, 1, 1); fgeo.rotateX(-Math.PI / 2);
+      this.farWater = new THREE.Mesh(fgeo, new THREE.MeshLambertMaterial({ color: 0x1d5a8a })); this.farWater.position.y = -0.6; this.group.add(this.farWater);
       this.setPalette(0, 'summer');
       this.buildBudget = 6;
     }
@@ -250,7 +249,7 @@
       }
     }
 
-    dispose() { for (const ch of this.chunks.values()) ch.mesh.geometry.dispose(); this.chunks.clear(); this.mat.dispose(); this.water.geometry.dispose(); this.waterMat.dispose(); }
+    dispose() { for (const ch of this.chunks.values()) ch.mesh.geometry.dispose(); this.chunks.clear(); this.mat.dispose(); this.water.geometry.dispose(); this.water.material.dispose(); this.farWater.geometry.dispose(); }
   }
 
   BW.Terrain = Terrain;
