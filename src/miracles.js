@@ -33,6 +33,8 @@
       G.god.miracleImpress += def.cost / 6;
       for (const t of G.enemyTowns()) { const c = G.center(t); if (c && dist(c.x, c.z, x, z) < 45) t.loyalty -= def.align >= 0 ? 4 : 6; }
       creatureWatch(G, kind, x, z);
+      if (kind === 'water') BW.creatureObserve(G, 'water', x, z);
+      if (kind === 'fire' || kind === 'lightning' || kind === 'meteor') BW.advise && BW.advise(G, 'fireCast');
       if (!G.god.stats.firstCast) { G.god.stats.firstCast = 1; BW.grantTribute(G, 1, 'First miracle'); }
     }
     const hostile = ['fire', 'lightning', 'hurricane', 'meteor', 'siren'].includes(kind);
@@ -66,8 +68,8 @@
         if (G.camera) G.camera.shake = 1.2;
         break;
       case 'lightning':
-        for (let i = 0; i < 40; i++) P.spawn(x + (Math.random() - 0.5) * 2, y + i * 1.2, z + (Math.random() - 0.5) * 2, 0, 0, 0, 0.5, 0xddeeff, 3);
-        for (let i = 0; i < 20; i++) P.spawn(x + (Math.random() - 0.5) * 6, y + 30 + i, z + (Math.random() - 0.5) * 6, 0, 0, 0, 0.3, 0xffffff, 4);
+        for (let i = 0; i < 40; i++) P.spawn(x + (BW.rand() - 0.5) * 2, y + i * 1.2, z + (BW.rand() - 0.5) * 2, 0, 0, 0, 0.5, 0xddeeff, 3);
+        for (let i = 0; i < 20; i++) P.spawn(x + (BW.rand() - 0.5) * 6, y + 30 + i, z + (BW.rand() - 0.5) * 6, 0, 0, 0, 0.3, 0xffffff, 4);
         explode(G, x, z, def.radius, 70, 450, owner, true);
         BW.audio.play('lightning');
         if (G.camera) G.camera.shake = 1.5;
@@ -81,7 +83,7 @@
         const pt = G.playerTown();
         let n = 0;
         for (const p of G.inRadius(G.people, x, z, def.radius)) if (p.owner !== owner && p.job !== 'soldier' && !p.inside && pt && owner === 0) { const from = BW.migrate(G, p, pt); if (from) from.loyalty -= 3; n++; }
-        for (let i = 0; i < 100; i++) P.spawn(x + (Math.random() - 0.5) * def.radius * 2, y + 1 + Math.random() * 3, z + (Math.random() - 0.5) * def.radius * 2, 0, 2 + Math.random() * 2, 0, 2, 0xff88ff, 2.5);
+        for (let i = 0; i < 100; i++) P.spawn(x + (BW.rand() - 0.5) * def.radius * 2, y + 1 + BW.rand() * 3, z + (BW.rand() - 0.5) * def.radius * 2, 0, 2 + BW.rand() * 2, 0, 2, 0xff88ff, 2.5);
         if (owner === 0) G.say(n ? `${n} villagers heed your song and join you.` : 'The song echoes, but nobody was there to hear it.', n ? 'good' : 'warn');
         BW.audio.play('siren');
         break;
@@ -104,9 +106,10 @@
     P.burst(x, y + 1.5, z, 140, 12, 1.2, 0xff5522, 3, 4, 4);
     P.burst(x, y + 1.5, z, 60, 6, 2.0, 0x333333, 4, -1, 3);
     for (const p of G.inRadius(G.people, x, z, r)) { if (!p.inside) { const f = 1 - dist(p.x, p.z, x, z) / r * 0.5; BW.hurt(G, p, personDmg * f, owner); } }
-    for (const b of G.inRadius(G.buildings, x, z, r + 3)) { BW.damageBuilding(G, b, buildingDmg, owner); b._lastAttacker = owner; if (burn && !b.dead && Math.random() < 0.7) BW.igniteBuilding(G, b, 1); }
+    for (const b of G.inRadius(G.buildings, x, z, r + 3)) { BW.damageBuilding(G, b, buildingDmg, owner); b._lastAttacker = owner; if (burn && !b.dead && BW.rand() < 0.7) BW.igniteBuilding(G, b, 1); }
     for (const t of G.inRadius(G.trees, x, z, r)) if (burn) BW.igniteTree(G, t, 1);
     for (const c of G.inRadius(G.creatures, x, z, r + 2)) BW.hurtCreature(G, c, personDmg * 1.4, owner);
+    if (owner === 0) BW.frighten(G, x, z, 10);
     for (const it of G.inRadius(G.items, x, z, r)) G.remove(it);
     BW.scare(G, x, z, r * 2.5, 5);
     if (owner === 0) { for (const p of G.people) if (p.owner === 0 && dist(p.x, p.z, x, z) < r) BW.shiftAlignment(G, -0.004); }
@@ -118,8 +121,8 @@
       e.t -= dt;
       const y = G.groundY(e.x, e.z);
       if (e.kind === 'rain') {
-        for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, rr = Math.sqrt(Math.random()) * e.r; P.spawn(e.x + Math.cos(a) * rr, y + 14 + Math.random() * 4, e.z + Math.sin(a) * rr, 0, -22, 0, 0.7, 0x77bbff, 1.4); }
-        if (Math.random() < dt * 8) for (let i = 0; i < 8; i++) { const a = Math.random() * 6.28, rr = Math.random() * e.r; P.spawn(e.x + Math.cos(a) * rr, y + 16, e.z + Math.sin(a) * rr, (Math.random() - 0.5) * 2, 0.2, (Math.random() - 0.5) * 2, 1.5, 0xccddee, 5); }
+        for (let i = 0; i < 40; i++) { const a = BW.rand() * 6.28, rr = Math.sqrt(BW.rand()) * e.r; P.spawn(e.x + Math.cos(a) * rr, y + 14 + BW.rand() * 4, e.z + Math.sin(a) * rr, 0, -22, 0, 0.7, 0x77bbff, 1.4); }
+        if (BW.rand() < dt * 8) for (let i = 0; i < 8; i++) { const a = BW.rand() * 6.28, rr = BW.rand() * e.r; P.spawn(e.x + Math.cos(a) * rr, y + 16, e.z + Math.sin(a) * rr, (BW.rand() - 0.5) * 2, 0.2, (BW.rand() - 0.5) * 2, 1.5, 0xccddee, 5); }
         for (const b of G.inRadius(G.buildings, e.x, e.z, e.r + 2)) { if (b.kind === 'field') { b.rain = 14; } if (b.fire > 0) { b.fire = 0; b._dirty = true; } }
         for (const t of G.inRadius(G.trees, e.x, e.z, e.r + 1)) { if (t.fire > 0) { t.fire = 0; G.treesDirty = true; } t.hp = Math.min(40 * t.size, t.hp + dt * 5); }
         for (const c of G.inRadius(G.creatures, e.x, e.z, e.r)) if (c.owner === 0 && e.owner === 0 && !c.rained) { c.rained = 1; }
@@ -128,14 +131,14 @@
         for (let i = 0; i < 30; i++) { const a = G.time * 6 + i * 0.7, rr = 2 + (i / 30) * e.r; P.spawn(e.x + Math.cos(a) * rr, y + 0.5 + i * 0.5, e.z + Math.sin(a) * rr, -Math.sin(a) * 10, 3, Math.cos(a) * 10, 0.6, 0xbbccdd, 2.2); }
         if (e.tick > 0.4) {
           e.tick = 0;
-          for (const p of G.inRadius(G.people, e.x, e.z, e.r)) if (!p.inside && !p.held) { p.thrown = { vx: (Math.random() - 0.5) * 24, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 24, by: e.owner }; p.state = 'idle'; }
-          for (const t of G.inRadius(G.trees, e.x, e.z, e.r).slice(0, 3)) { const it = G.addItem('wood', t.wood, t.x, t.z); it.thrown = { vx: (Math.random() - 0.5) * 20, vy: 12, vz: (Math.random() - 0.5) * 20 }; G.remove(t); }
+          for (const p of G.inRadius(G.people, e.x, e.z, e.r)) if (!p.inside && !p.held) { p.thrown = { vx: (BW.rand() - 0.5) * 24, vy: 10 + BW.rand() * 8, vz: (BW.rand() - 0.5) * 24, by: e.owner }; p.state = 'idle'; }
+          for (const t of G.inRadius(G.trees, e.x, e.z, e.r).slice(0, 3)) { const it = G.addItem('wood', t.wood, t.x, t.z); it.thrown = { vx: (BW.rand() - 0.5) * 20, vy: 12, vz: (BW.rand() - 0.5) * 20 }; G.remove(t); }
           for (const b of G.inRadius(G.buildings, e.x, e.z, e.r + 2)) BW.damageBuilding(G, b, 25, e.owner);
           for (const c of G.inRadius(G.creatures, e.x, e.z, e.r)) BW.hurtCreature(G, c, 15, e.owner);
         }
       } else if (e.kind === 'meteor') {
         const h = e.t * 60;
-        for (let i = 0; i < 6; i++) P.spawn(e.x + (Math.random() - 0.5) * 3 + e.t * 20, y + h + Math.random() * 4, e.z + (Math.random() - 0.5) * 3, 0, 0, 0, 0.6, 0xff9933, 6);
+        for (let i = 0; i < 6; i++) P.spawn(e.x + (BW.rand() - 0.5) * 3 + e.t * 20, y + h + BW.rand() * 4, e.z + (BW.rand() - 0.5) * 3, 0, 0, 0, 0.6, 0xff9933, 6);
         if (e.t <= 0) {
           explode(G, e.x, e.z, e.r, 120, 1200, e.owner, true);
           P.burst(e.x, y + 2, e.z, 200, 20, 2, 0xffaa55, 4, 5, 6);

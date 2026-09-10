@@ -165,6 +165,7 @@
       { geo: bodyGeo, mat: white, offsetY: 0.75, colored: true },
       { geo: headGeo, mat: skin, offsetY: 1.42, colored: false },
       { geo: carryGeo, mat: carryMat, offsetY: 1.85, colored: true },
+      { geo: new THREE.SphereGeometry(0.22, 6, 5), mat: new THREE.MeshBasicMaterial({ color: 0xffffff }), offsetY: 2.25, colored: true },
     ], max);
   }
   function makeTreeCrowd(max) {
@@ -246,6 +247,27 @@
         g.add(cyl(1.3, 1.6, 8, 8, 0x8a8a90, 0, 4, 0));
         g.add(cyl(1.9, 1.7, 1.2, 8, 0x707078, 0, 8.6, 0));
         g.add(cone(1.9, 1.6, 8, roof, 0, 10, 0));
+        break;
+      }
+      case 'storehouse': {
+        g.add(box(5, 3, 5, 0x9a7a4a, 0, 1.5, 0));
+        g.add(cone(3.8, 1.6, 4, roof, 0, 3.8, 0, Math.PI / 4));
+        g.add(box(1.2, 0.8, 1.2, 0xd9b24c, -1.4, 0.4, 3.0)); g.add(box(1.0, 0.6, 1.0, 0x8a5a2a, 1.2, 0.3, 3.0));
+        break;
+      }
+      case 'road': {
+        const r = box(4, 0.25, 4, 0x9a8a72, 0, 0.12, 0); r.receiveShadow = true; r.castShadow = false; g.add(r);
+        break;
+      }
+      case 'wall': {
+        g.add(box(2.6, 3.2, 2.6, 0x8a8a90, 0, 1.6, 0));
+        g.add(box(2.8, 0.5, 2.8, 0x707078, 0, 3.4, 0));
+        break;
+      }
+      case 'gate': {
+        g.add(box(1.2, 4.5, 2.6, 0x8a8a90, -1.9, 2.25, 0)); g.add(box(1.2, 4.5, 2.6, 0x8a8a90, 1.9, 2.25, 0));
+        g.add(box(5.2, 0.8, 2.8, 0x707078, 0, 4.4, 0));
+        g.add(box(2.6, 3.4, 0.3, 0x4a3018, 0, 1.7, 0));
         break;
       }
       case 'wonder': {

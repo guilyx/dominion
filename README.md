@@ -43,7 +43,15 @@ quick-save / quick-load.
 | Centre on temple / creature | Space / F |
 | Tabs | `B`uild, `M`iracles, `C`reature, army `T`, trib`U`te, Esc menu |
 | Speed / pause | `+` / `-`, `P` |
+| Hurry a villager | Alt+click them (they work faster for a while, but it scares them) |
+| Sacrifice | Alt+drop a villager on your own altar |
+| Gesture casting | Ctrl+drag: circle = Water, V = Heal, zigzag = Fireball, vertical = Lightning, horizontal = Shield |
+| Walls and roads | Pick them in Build, then drag a line on the ground |
+| Minimap | Click to jump the camera |
+| Photo mode | `Y` hides the interface |
 | Help overlay | `H` |
+
+Touch works too: one finger pans or grabs, two fingers pinch to zoom and twist to rotate.
 
 ## How it works
 
@@ -79,16 +87,53 @@ miracle it watches you cast nearby and casts it for free.
 **Tribute** is earned from milestones (population, first miracle, wonders, towns won, lands won)
 and spent on permanent unlocks: buildings, miracles, creature upgrades and divine perks.
 
-**Campaign.** Four procedurally generated lands of increasing difficulty. Alignment, tribute,
-unlocks and your creature's training carry over. "Skirmish" drops you on the final land with a
-pile of tribute.
+**Villager lives.** Everyone has a name, an age and sometimes a trait (strong, pious, fertile,
+hardy, coward, and the rare chosen one). Children play until they grow up, elders slow down and
+eventually die. Villagers have needs (food, home, worship, safety, rest); the loudest unmet need
+floats over their head as a coloured orb, and town happiness drives births, prayer and how easily
+rivals convert them.
+
+**Seasons and weather.** Two days per season. Winter stalls crops and burns wood for warmth.
+Rain grows crops everywhere, storms strike with lightning, summer droughts wither fields and
+start wildfires.
+
+**The director.** A pacing system watches how strong you are and, every few minutes, sends
+something: migrants, a windfall, a prophet, a storm, a plague, raiders, a wildfire. Two
+consciences, Seraph and Imp, comment on what happens with opposite advice.
+
+**Fortification and logistics.** Walls block everyone, gates let your own people through, roads
+speed movement. Storage is capped by your temple, houses and storehouses. Soldiers come in three
+kinds: swordsmen, archers and battering rams. Enemy soldiers that cannot path to you will smash
+the nearest wall.
+
+**Settlements.** With the Settlements unlock, build a New Temple far from your first and drop
+villagers on it to found a second town.
+
+**Campaign and skirmish.** Four hand-tuned lands of increasing difficulty; alignment, tribute,
+unlocks and your creature's training carry over. Skirmish takes a seed, a map size (up to a
+"vast" 800-unit island) and one to five rival tribes, so every seed is a new island you can share.
+
+## Under the hood
+
+- **Chunked terrain with LOD.** The island is a 2-unit heightfield; the mesh is split into 32-cell
+  chunks that are built lazily around the camera at three levels of detail, with skirts hiding
+  the seams, and unloaded when far. Alignment and seasons repaint chunks lazily.
+- **Spatial hash.** Villagers, trees, rocks and items live in 8-unit grid buckets; every
+  "nearest" query is local.
+- **A\* pathfinding.** A 3-unit walkability grid with roads as cheap cells, gates as owner-only
+  cells, string-pulled paths and a straight-line fast path when nothing is in the way.
+- **Simulation LOD.** Villagers far from the camera tick every third frame with a scaled dt.
+- **Seeded randomness.** All simulation randomness comes from one seeded generator saved with the
+  game, so a seed always produces the same island.
+- **Compact saves.** Trees are stored as flat number arrays; a vast map saves in about half a
+  megabyte.
 
 ## Code map
 
 ```
 index.html      page shell and HUD markup
 style.css       HUD styling
-src/util.js     PRNG, value noise, maths helpers
+src/util.js     PRNG, value noise, maths helpers, spatial hash, A* nav grid
 src/data.js     buildings, miracles, unlocks, species, lands (tuning lives here)
 src/terrain.js  island heightfield, mesh, water, ray picking
 src/gfx.js      renderer, lights, mesh kits, instanced crowds, particles
@@ -100,7 +145,8 @@ src/buildings.js construction, fire, towers, damage
 src/towns.js    economy, births, loyalty/conversion, enemy AI
 src/miracles.js miracle effects
 src/creature.js creature AI, learning, combat
-src/army.js     platoons and combat
+src/army.js     platoons, unit types and combat
+src/director.js seasons, weather, the pacing director and the advisors
 src/hand.js     the divine hand and targeting modes
 src/ui.js       HUD, tabs, overlays
 src/game.js     bootstrap, land generation, main loop, campaign flow

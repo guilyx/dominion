@@ -10,7 +10,7 @@
     constructor(seed, size, sites) {
       this.seed = seed;
       this.size = size;
-      this.res = 160;                       // cells per side
+      this.res = Math.round(size / 2);      // 2-unit cells
       this.cell = size / this.res;
       this.half = size / 2;
       this.heights = new Float32Array((this.res + 1) * (this.res + 1));
@@ -116,67 +116,141 @@
     }
     inBoundsLoose(x, z) { return Math.abs(x) < this.half * 1.6 && Math.abs(z) < this.half * 1.6; }
 
+    // ------------------------------------------------------------ chunks
+    // The mesh is split into chunks built lazily around the camera, at three
+    // levels of detail. Each chunk carries a skirt so LOD seams do not show.
     _buildMesh() {
-      const R = this.res, W = R + 1;
-      const geo = new THREE.PlaneGeometry(this.size, this.size, R, R);
-      geo.rotateX(-Math.PI / 2);
-      const pos = geo.attributes.position;
-      for (let j = 0; j <= R; j++) for (let i = 0; i <= R; i++) {
-        const idx = j * W + i;
-        pos.setY(idx, this.heights[idx]);
-      }
-      pos.needsUpdate = true;
-      geo.computeVertexNormals();
-      const colors = new Float32Array(W * W * 3);
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      this.geo = geo;
+      this.CS = 32;                                   // cells per chunk side
+      this.nChunks = Math.ceil(this.res / this.CS);
+      this.chunks = new Map();
+      this.colorVersion = 1;
       this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-      this.mesh = new THREE.Mesh(geo, this.mat);
-      this.mesh.receiveShadow = true;
-      this.mesh.castShadow = false;
-      this.mesh.name = 'terrain';
-      this.recolor(0);
-
-      // Water
+      this.group = new THREE.Group();
       const wgeo = new THREE.PlaneGeometry(this.size * 3, this.size * 3, 1, 1);
       wgeo.rotateX(-Math.PI / 2);
       this.waterMat = new THREE.MeshPhongMaterial({ color: 0x2a6fa8, transparent: true, opacity: 0.78, shininess: 90, specular: 0x88bbff });
       this.water = new THREE.Mesh(wgeo, this.waterMat);
-      this.water.position.y = 0;
       this.water.name = 'water';
-      this.group = new THREE.Group();
-      this.group.add(this.mesh, this.water);
+      this.group.add(this.water);
+      this.setPalette(0, 'summer');
+      this.buildBudget = 6;
     }
 
-    // Vertex colouring: sand/grass/rock/snow, tinted by the god's alignment.
-    recolor(alignment) {
-      const R = this.res, W = R + 1;
-      const col = this.geo.attributes.color;
-      const n = this.noise;
+    setPalette(alignment, season = 'summer') {
       const good = clamp(alignment, 0, 1), evil = clamp(-alignment, 0, 1);
-      const c = new THREE.Color();
-      const grassA = new THREE.Color(0x4f8a3a).lerp(new THREE.Color(0x6fc55a), good * 0.6).lerp(new THREE.Color(0x6a5a3a), evil * 0.75);
-      const grassB = new THREE.Color(0x3d7031).lerp(new THREE.Color(0x4fa84a), good * 0.6).lerp(new THREE.Color(0x4a3a2c), evil * 0.75);
-      const sand = new THREE.Color(0xd8c98a).lerp(new THREE.Color(0x8a7a60), evil * 0.5);
-      const rock = new THREE.Color(0x7a746a).lerp(new THREE.Color(0x5a3c3c), evil * 0.6);
-      const snow = new THREE.Color(0xf4f4f8);
-      for (let j = 0; j <= R; j++) for (let i = 0; i <= R; i++) {
-        const idx = j * W + i;
-        const x = i * this.cell - this.half, z = j * this.cell - this.half;
-        const h = this.heights[idx];
-        const slope = this.slopeAt(x, z);
-        const v = n.fbm(x * 0.08, z * 0.08, 2) * 0.5 + 0.5;
-        c.copy(grassA).lerp(grassB, v);
-        if (h < 2.5) c.lerp(sand, 1 - smoothstep(0.2, 2.5, h));
-        if (slope > 0.7) c.lerp(rock, smoothstep(0.7, 1.3, slope));
-        if (h > 34) c.lerp(snow, smoothstep(34, 44, h));
-        if (h < 0) c.lerp(new THREE.Color(0x2b4a5a), smoothstep(0, -6, h));
-        col.setXYZ(idx, c.r, c.g, c.b);
-      }
-      col.needsUpdate = true;
+      const P = this.palette = {};
+      P.grassA = new THREE.Color(0x4f8a3a).lerp(new THREE.Color(0x6fc55a), good * 0.6).lerp(new THREE.Color(0x6a5a3a), evil * 0.75);
+      P.grassB = new THREE.Color(0x3d7031).lerp(new THREE.Color(0x4fa84a), good * 0.6).lerp(new THREE.Color(0x4a3a2c), evil * 0.75);
+      if (season === 'autumn') { P.grassA.lerp(new THREE.Color(0xb08a3a), 0.35); P.grassB.lerp(new THREE.Color(0x8a6a2a), 0.35); }
+      if (season === 'winter') { P.grassA.lerp(new THREE.Color(0xe8eef2), 0.75); P.grassB.lerp(new THREE.Color(0xd0dae2), 0.75); }
+      if (season === 'spring') { P.grassA.lerp(new THREE.Color(0x7fd46a), 0.25); P.grassB.lerp(new THREE.Color(0x5fb85a), 0.25); }
+      P.sand = new THREE.Color(0xd8c98a).lerp(new THREE.Color(0x8a7a60), evil * 0.5);
+      P.rock = new THREE.Color(0x7a746a).lerp(new THREE.Color(0x5a3c3c), evil * 0.6);
+      P.snow = new THREE.Color(0xf4f4f8);
+      P.deep = new THREE.Color(0x2b4a5a);
+      P.snowLine = season === 'winter' ? 12 : 34;
+      this.colorVersion++;
     }
 
-    dispose() { this.geo.dispose(); this.mat.dispose(); this.water.geometry.dispose(); this.waterMat.dispose(); }
+    // Kept for callers: repaint everything for a new alignment/season.
+    recolor(alignment, season) { this.setPalette(alignment, season || this.season || 'summer'); if (season) this.season = season; }
+
+    _vertexColor(x, z, h, c) {
+      const P = this.palette, n = this.noise;
+      const slope = this.slopeAt(x, z);
+      const v = n.fbm(x * 0.08, z * 0.08, 2) * 0.5 + 0.5;
+      c.copy(P.grassA).lerp(P.grassB, v);
+      if (h < 2.5) c.lerp(P.sand, 1 - smoothstep(0.2, 2.5, h));
+      if (slope > 0.7) c.lerp(P.rock, smoothstep(0.7, 1.3, slope));
+      if (h > P.snowLine) c.lerp(P.snow, smoothstep(P.snowLine, P.snowLine + 10, h));
+      if (h < 0) c.lerp(P.deep, smoothstep(0, -6, h));
+    }
+
+    _buildChunk(ci, cj, lod) {
+      const step = 1 << lod, CS = this.CS, R = this.res, W = R + 1;
+      const i0 = ci * CS, j0 = cj * CS;
+      const i1 = Math.min(R, i0 + CS), j1 = Math.min(R, j0 + CS);
+      const cols = Math.ceil((i1 - i0) / step) + 1, rows = Math.ceil((j1 - j0) / step) + 1;
+      const nv = cols * rows, skirtN = 2 * cols + 2 * rows;
+      const pos = new Float32Array((nv + skirtN) * 3), col = new Float32Array((nv + skirtN) * 3), nor = new Float32Array((nv + skirtN) * 3);
+      const c = new THREE.Color();
+      const vi = (r, k) => r * cols + k;
+      let p = 0;
+      for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) {
+        const i = Math.min(i1, i0 + k * step), j = Math.min(j1, j0 + r * step);
+        const x = i * this.cell - this.half, z = j * this.cell - this.half;
+        const h = this.heights[j * W + i];
+        pos[p * 3] = x; pos[p * 3 + 1] = h; pos[p * 3 + 2] = z;
+        const nrm = this.normalAt(x, z); nor[p * 3] = nrm.x; nor[p * 3 + 1] = nrm.y; nor[p * 3 + 2] = nrm.z;
+        this._vertexColor(x, z, h, c); col[p * 3] = c.r; col[p * 3 + 1] = c.g; col[p * 3 + 2] = c.b;
+        p++;
+      }
+      const idx = [];
+      for (let r = 0; r < rows - 1; r++) for (let k = 0; k < cols - 1; k++) {
+        const a = vi(r, k), b = vi(r, k + 1), d = vi(r + 1, k), e = vi(r + 1, k + 1);
+        idx.push(a, d, b, b, d, e);
+      }
+      // Skirt: duplicate edge vertices dropped by 6 units.
+      const edge = [];
+      for (let k = 0; k < cols; k++) edge.push(vi(0, k));
+      for (let r = 1; r < rows; r++) edge.push(vi(r, cols - 1));
+      for (let k = cols - 2; k >= 0; k--) edge.push(vi(rows - 1, k));
+      for (let r = rows - 2; r >= 1; r--) edge.push(vi(r, 0));
+      const sBase = nv;
+      for (let e = 0; e < edge.length; e++) {
+        const src = edge[e], dst = sBase + e;
+        pos[dst * 3] = pos[src * 3]; pos[dst * 3 + 1] = pos[src * 3 + 1] - 6; pos[dst * 3 + 2] = pos[src * 3 + 2];
+        col[dst * 3] = col[src * 3] * 0.8; col[dst * 3 + 1] = col[src * 3 + 1] * 0.8; col[dst * 3 + 2] = col[src * 3 + 2] * 0.8;
+        nor[dst * 3] = nor[src * 3]; nor[dst * 3 + 1] = nor[src * 3 + 1]; nor[dst * 3 + 2] = nor[src * 3 + 2];
+      }
+      for (let e = 0; e < edge.length; e++) {
+        const a = edge[e], b = edge[(e + 1) % edge.length], sa = sBase + e, sb = sBase + (e + 1) % edge.length;
+        idx.push(a, sa, b, b, sa, sb);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geo.setIndex(idx);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, this.mat);
+      mesh.receiveShadow = true; mesh.name = 'terrain';
+      return mesh;
+    }
+
+    // Called every frame: ensure chunks near the camera exist at the right LOD.
+    updateChunks(camX, camZ, camY) {
+      let built = 0;
+      const CSw = this.CS * this.cell;
+      const far = 750 + camY * 0.5;
+      for (let cj = 0; cj < this.nChunks; cj++) for (let ci = 0; ci < this.nChunks; ci++) {
+        const cx = (ci + 0.5) * CSw - this.half, cz = (cj + 0.5) * CSw - this.half;
+        const d = Math.hypot(cx - camX, cz - camZ, camY * 0.6);
+        const key = cj * this.nChunks + ci;
+        const cur = this.chunks.get(key);
+        if (d > far) { if (cur) { this.group.remove(cur.mesh); cur.mesh.geometry.dispose(); this.chunks.delete(key); } continue; }
+        const lod = d < 120 ? 0 : d < 300 ? 1 : 2;
+        if (cur && cur.lod === lod && cur.version === this.colorVersion) continue;
+        if (built >= this.buildBudget) continue;
+        if (cur) { this.group.remove(cur.mesh); cur.mesh.geometry.dispose(); }
+        const mesh = this._buildChunk(ci, cj, lod);
+        this.group.add(mesh);
+        this.chunks.set(key, { mesh, lod, version: this.colorVersion });
+        built++;
+      }
+    }
+
+    // Force all visible chunks to rebuild (after terraforming).
+    invalidateArea(x, z, r) {
+      const CSw = this.CS * this.cell;
+      for (const [key, ch] of this.chunks) {
+        const ci = key % this.nChunks, cj = Math.floor(key / this.nChunks);
+        const cx = (ci + 0.5) * CSw - this.half, cz = (cj + 0.5) * CSw - this.half;
+        if (Math.hypot(cx - x, cz - z) < r + CSw) ch.version = -1;
+      }
+    }
+
+    dispose() { for (const ch of this.chunks.values()) ch.mesh.geometry.dispose(); this.chunks.clear(); this.mat.dispose(); this.water.geometry.dispose(); this.waterMat.dispose(); }
   }
 
   BW.Terrain = Terrain;

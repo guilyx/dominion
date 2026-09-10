@@ -26,22 +26,40 @@
 
     hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
 
-    newCampaign(species, landIndex = 0, skirmish = false) {
-      this.profile = { species, landIndex, alignment: 0, tribute: skirmish ? 12 : 0, unlocks: {}, creature: null, skirmish };
+    newCampaign(species, landIndex = 0, skirmish = false, opts = null) {
+      this.profile = { species, landIndex, alignment: 0, tribute: skirmish ? 14 : 0, unlocks: {}, creature: null, skirmish, custom: opts };
       this.startLand(landIndex);
+    }
+
+    // A skirmish land generated from a seed: tribes spread around the island.
+    landFor(index) {
+      const P = this.profile;
+      if (!P.custom) return BW.LANDS[index];
+      if (P.customLand) return P.customLand;
+      const o = P.custom; const rng = new BW.RNG(o.seed);
+      const R = o.size * 0.29; const n = o.tribes;
+      const base = rng.next() * 6.28;
+      const at = (k) => { const a = base + k / (n + 1) * 6.28; return { x: Math.round(Math.cos(a) * R), z: Math.round(Math.sin(a) * R) }; };
+      const names = ['Norse', 'Aztec', 'Greek', 'Japanese', 'Egyptian'];
+      const species = ['wolf', 'lion', 'ape', 'cow', 'tortoise'];
+      const enemies = [];
+      for (let k = 1; k <= n; k++) { const p = at(k); enemies.push({ name: names[(k - 1) % 5], x: p.x, z: p.z, pop: 14 + Math.floor(rng.next() * 12), aggression: 0.2 + rng.next() * 0.6, color: 1 + ((k - 1) % 4), creature: rng.next() < 0.4 ? { species: species[Math.floor(rng.next() * 5)], size: 1.8 + rng.next() * 1.2 } : null, godMiracles: rng.next() < 0.4 }); }
+      const pp = at(0);
+      P.customLand = { name: `Isle ${o.seed}`, seed: o.seed, size: o.size, custom: true, intro: `A ${o.size >= 800 ? 'vast' : o.size >= 500 ? 'large' : 'small'} island with ${n} rival tribe${n > 1 ? 's' : ''}. Win it by awe or by war.`, player: { x: pp.x, z: pp.z, pop: 18 }, enemies, objectives: ['Convert or conquer every town'], treeDensity: 1.1 };
+      return P.customLand;
     }
 
     // ------------------------------------------------------------ land setup
     startLand(index) {
       this.profile.landIndex = index;
-      const land = BW.LANDS[index];
+      const land = this.landFor(index);
       this.running = false;
       document.getElementById('loading').classList.add('show');
       this.ui.hideOverlay();
       setTimeout(() => {
         this.buildLand(land, index);
         document.getElementById('loading').classList.remove('show');
-        this.ui.landIntro(land, () => { this.running = true; this.paused = false; this.G.say(`Welcome to ${land.name}. Press H for controls.`, 'info'); });
+        this.ui.landIntro(land, () => { this.running = true; this.paused = false; this.G.say(`Welcome to ${land.name}. Press H for controls.`, 'info'); BW.advise(this.G, 'start'); });
       }, 50);
     }
 
@@ -67,6 +85,7 @@
       G.rng = new BW.RNG(land.seed * 7 + 1);
       this.gfx.world.add(terrain.group);
       G.onMessage = (t, k) => this.ui.message(t, k);
+      G.onAdvice = (a, b) => this.ui.advice(a, b);
       G.onDefeat = () => this.onDefeat();
       G.cameraState = () => this.camera.state();
       // Profile carry-over
@@ -96,7 +115,11 @@
       // Influence ring
       G.inflRing = BW.groundRing(G.god.influence, 0xffe9a0, 160); this.gfx.world.add(G.inflRing);
       G.god.influence = 45;
-      terrain.recolor(G.god.alignment);
+      G.season = 'spring';
+      terrain.recolor(G.god.alignment, 'spring');
+      G.ensureNav();
+      terrain.updateChunks(this.camera.cam.position.x, this.camera.cam.position.z, this.camera.cam.position.y);
+      this.ui.initMinimap();
       BW.audio.setAlignment(G.god.alignment);
       this.ui.closeTab();
       this.ui.hideBuilding();
@@ -107,6 +130,8 @@
     setupTown(G, town, pop, isPlayer, rng) {
       const c = BW.placeBuilding(G, 'center', town, town.x, town.z, 0, true);
       town.centerId = c.id;
+      // A short road from the temple door, so people learn what roads do.
+      if (isPlayer) for (let i = 1; i <= 3; i++) { const x = town.x, z = town.z + 6 + i * 4; if (!BW.footprintOk(G, 'road', x, z, town, false)) BW.placeBuilding(G, 'road', town, x, z, 0, true); }
       const put = (kind, rmin, rmax) => { const s = BW.findSpot(G, kind, town, town.x, town.z, rmin, rmax, rng, 40); if (s) BW.placeBuilding(G, kind, town, s.x, s.z, s.rot, true); };
       const houses = Math.ceil(pop / 5) + 1;
       for (let i = 0; i < houses; i++) put('house', 9, 20);
@@ -155,6 +180,7 @@
       if (!this.G) return;
       const G = this.G;
       this.camera.update(dt);
+      G.terrain.updateChunks(this.camera.cam.position.x, this.camera.cam.position.z, this.camera.cam.position.y);
       this.hand.update(dt);
       if (this.running && !this.paused) {
         for (let s = 0; s < this.speed; s++) this.simulate(dt);
@@ -173,8 +199,11 @@
 
     simulate(dt) {
       const G = this.G;
-      G.time += dt;
+      G.time += dt; G.frame++;
       G.tod = (G.tod + dt / G.dayLength) % 1;
+      G.rebuildGrids();
+      G.ensureNav();
+      BW.updateWorld(G, dt);
       BW.updatePeople(G, dt);
       BW.updateBuildings(G, dt);
       BW.updateTowns(G, dt);
@@ -211,7 +240,7 @@
       const G = this.G; G.won = true; this.running = false;
       BW.audio.play('win');
       G.god.tribute += 10;
-      const isLast = this.profile.landIndex >= BW.LANDS.length - 1 || this.profile.skirmish;
+      const isLast = this.profile.landIndex >= BW.LANDS.length - 1 || this.profile.skirmish || this.profile.custom;
       this.storeProfile();
       const stats = { day: Math.floor(G.time / G.dayLength) + 1, pop: G.god.pop, casts: G.god.stats.casts, align: G.god.alignment > 0.2 ? 'good' : G.god.alignment < -0.2 ? 'evil' : 'neutral' };
       this.ui.victory(stats, isLast, () => { if (isLast) this.showMainMenu(); else { this.profile.landIndex++; this.startLand(this.profile.landIndex); } });
@@ -238,7 +267,7 @@
       try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
       if (!data) { if (this.G) this.G.say('No save found.', 'warn'); return; }
       this.profile = data.profile;
-      const land = BW.LANDS[data.world.landIndex];
+      const land = this.landFor(data.world.landIndex);
       this.running = false;
       document.getElementById('loading').classList.add('show');
       this.ui.hideOverlay();
@@ -246,7 +275,9 @@
         this.buildLand(land, data.world.landIndex);
         this.G.loadState(data.world);
         if (data.world.camera) this.camera.restore(data.world.camera);
-        this.G.terrain.recolor(this.G.god.alignment);
+        this.G.terrain.recolor(this.G.god.alignment, this.G.season);
+        this.G.ensureNav();
+        this.ui.initMinimap();
         document.getElementById('landname').textContent = land.name;
         document.getElementById('loading').classList.remove('show');
         this.running = true; this.paused = false;
@@ -264,6 +295,7 @@
       if (tabs[k]) return this.ui.toggleTab(tabs[k]);
       if (k === 'Escape') { if (this.hand.mode) this.hand.setMode(null); else if (this.ui.tab) this.ui.closeTab(); else this.ui.toggleTab('menu'); return; }
       if (k === 'KeyH') return this.ui.toggleHelp();
+      if (k === 'KeyY') { document.getElementById('ui').classList.toggle('photo'); return; }
       if (k === 'KeyP') { this.togglePause(); return; }
       if (k === 'KeyR' && this.hand.ghost) { this.hand.ghostRot += Math.PI / 2; return; }
       if (k === 'Space') { const t = G.playerTown(); if (t) this.camera.lookAt(t.x, t.z); return; }

@@ -21,6 +21,7 @@
       if (c.owner === 0) {
         c.downed = 45; c.state = 'downed';
         G.say('Your creature has been knocked out. It will recover at your temple.', 'bad');
+        BW.advise && BW.advise(G, 'creatureDown');
         G.particles.burst(c.x, c.y + 2, c.z, 40, 5, 1.5, 0xff4444, 2.5);
       } else {
         G.say(`The enemy ${c.name} has been slain!`, 'good');
@@ -81,7 +82,7 @@
     }
     let sum = 0; for (const k in w) sum += Math.max(0, w[k]);
     if (sum <= 0) return 'wander';
-    let r = Math.random() * sum;
+    let r = BW.rand() * sum;
     for (const k in w) { r -= Math.max(0, w[k]); if (r <= 0) return k; }
     return 'wander';
   }
@@ -142,16 +143,16 @@
       case 'idle':
         c.moving = false;
         c.idleT = (c.idleT || 0) + dt;
-        if (c.idleT > 1.5 + Math.random() * 2 && c.leash !== 'stay') { c.idleT = 0; setAction(c, choose(G, c)); }
+        if (c.idleT > 1.5 + BW.rand() * 2 && c.leash !== 'stay') { c.idleT = 0; setAction(c, choose(G, c)); }
         else if (c.leash === 'stay' && c.idleT > 3) { c.idleT = 0; const k = choose(G, c); if (['sleep', 'castWater', 'castHeal', 'castFire', 'castLightning'].includes(k)) setAction(c, k); }
         break;
       case 'wander':
-        if (!c.goal) { const a = Math.random() * 6.28, r = 10 + Math.random() * 20; const bx = center ? center.x : c.x, bz = center ? center.z : c.z; c.goal = { x: (dist(c.x, c.z, bx, bz) > 60 ? bx : c.x) + Math.sin(a) * r, z: (dist(c.x, c.z, bx, bz) > 60 ? bz : c.z) + Math.cos(a) * r }; }
+        if (!c.goal) { const a = BW.rand() * 6.28, r = 10 + BW.rand() * 20; const bx = center ? center.x : c.x, bz = center ? center.z : c.z; c.goal = { x: (dist(c.x, c.z, bx, bz) > 60 ? bx : c.x) + Math.sin(a) * r, z: (dist(c.x, c.z, bx, bz) > 60 ? bz : c.z) + Math.cos(a) * r }; }
         if (goTo(G, c, c.goal.x, c.goal.z, dt, 2) || c.actionT > 12) { c.state = 'idle'; c.goal = null; }
         break;
       case 'sleep':
         c.moving = false; c.energy = Math.min(100, c.energy + dt * 3);
-        if (Math.random() < dt * 2) G.particles.spawn(c.x, c.y + c.size * 2.5, c.z, 0.3, 1, 0, 1.5, 0xffffff, 2);
+        if (BW.rand() < dt * 2) G.particles.spawn(c.x, c.y + c.size * 2.5, c.z, 0.3, 1, 0, 1.5, 0xffffff, 2);
         if (c.energy >= 100 || c.actionT > 25) c.state = 'idle';
         break;
       case 'eatTree': {
@@ -160,7 +161,7 @@
         c.targetId = t.id;
         if (goTo(G, c, t.x, t.z, dt, 2.5)) {
           c.eatT = (c.eatT || 0) + dt; c.moving = false;
-          if (Math.random() < dt * 8) G.particles.burst(t.x, t.y + 2, t.z, 3, 2, 0.5, 0x4a8a3a, 1.2, 3);
+          if (BW.rand() < dt * 8) G.particles.burst(t.x, t.y + 2, t.z, 3, 2, 0.5, 0x4a8a3a, 1.2, 3);
           if (c.eatT > 2.5) { c.eatT = 0; G.remove(t); c.hunger = Math.max(0, c.hunger - 25); grow(G, c, 0.008); c.state = 'idle'; speak(c, 'Crunchy.'); }
         }
         break;
@@ -175,8 +176,9 @@
           c.hunger = Math.max(0, c.hunger - 45); grow(G, c, 0.015);
           c.alignment = clamp(c.alignment - 0.05, -1, 1);
           BW.scare(G, c.x, c.z, 15, 5);
-          if (own) { BW.shiftAlignment(G, -0.03); G.say('Your creature ate one of your villagers!', 'bad'); }
+          if (own) { BW.shiftAlignment(G, -0.03); G.say('Your creature ate one of your villagers!', 'bad'); BW.advise && BW.advise(G, 'ateVillager'); }
           else { BW.shiftAlignment(G, -0.01); const t = G.ents.get(p.town); if (t) t.loyalty -= 2; }
+          BW.frighten(G, c.x, c.z, 3);
           speak(c, 'Tasty. Was that wrong?');
           c.state = 'idle';
         } else if (c.actionT > 15) c.state = 'idle';
@@ -255,11 +257,21 @@
     }
   }
 
+  function maxHp(G, c) { return BW.SPECIES[c.species].hp * c.size * (c.owner === 0 && G.hasUnlock('c_armour') ? 1.5 : 1); }
   function grow(G, c, amount) {
     if (c.owner !== 0) return;
     c.growth += amount * (G.hasUnlock('c_growth') ? 2 : 1);
     const size = clamp(1 + c.growth, 1, G.hasUnlock('c_growth') ? 3.4 : 2.6);
-    if (size !== c.size) { const ratio = c.health / c.maxHealth; c.size = size; c.maxHealth = BW.SPECIES[c.species].hp * size; c.health = c.maxHealth * ratio; }
+    const want = maxHp(G, c);
+    if (size !== c.size || Math.abs(want - c.maxHealth) > 1) { const ratio = c.health / c.maxHealth; c.size = size; c.maxHealth = maxHp(G, c); c.health = c.maxHealth * ratio; }
+  }
+  // The creature copies what it sees the hand do nearby.
+  function observe(G, kind, x, z) {
+    const c = G.playerCreature(); if (!c || dist(c.x, c.z, x, z) > 45) return;
+    const map = { water: 'waterField', throw: 'playful', feed: 'eatFood', wood: 'gatherWood', food: 'harvest' };
+    const k = map[kind]; if (!k) return;
+    c.learned[k] = clamp(c.learned[k] + 0.05 * BW.SPECIES[c.species].learnRate, 0, 1);
+    if (BW.rand() < 0.3) speak(c, `I saw that. Maybe I should try ${ACTION_NAMES[k]} too.`);
   }
 
   function enemyCreature(G, c, dt) {
@@ -275,7 +287,7 @@
     if (c.state !== 'rampage' && c.state !== 'fight') {
       const threat = G.nearest(G.people, c.x, c.z, 45, (p) => p.owner === 0 && p.job === 'soldier' && !p.inside) || G.nearest(G.creatures, c.x, c.z, 40, (o) => o.owner === 0 && !o.downed) || G.nearest(G.people, c.x, c.z, 30, (p) => p.owner === 0 && !p.inside);
       if (threat) { c.state = 'fight'; c.targetId = threat.id; c.actionT = 0; }
-      else if (town && town.ai && G.time > (c.nextRampage || 300)) { c.state = 'rampage'; c.actionT = 0; c.nextRampage = G.time + 320 + Math.random() * 120; G.say(`The enemy ${c.name} is rampaging towards your town!`, 'bad'); BW.audio.play('growl'); }
+      else if (town && town.ai && G.time > (c.nextRampage || 300)) { c.state = 'rampage'; c.actionT = 0; c.nextRampage = G.time + 320 + BW.rand() * 120; G.say(`The enemy ${c.name} is rampaging towards your town!`, 'bad'); BW.audio.play('growl'); }
     }
     switch (c.state) {
       case 'fight': {
@@ -286,7 +298,7 @@
       }
       case 'rampage': {
         const pt = G.playerTown(); const pc = pt && G.center(pt);
-        if (!pc || c.actionT > 75) { c.state = 'idle'; c.nextRampage = G.time + 220 + Math.random() * 120; c.actionT = 0; break; }
+        if (!pc || c.actionT > 75) { c.state = 'idle'; c.nextRampage = G.time + 220 + BW.rand() * 120; c.actionT = 0; break; }
         const t = G.nearest(G.buildings, c.x, c.z, 30, (b) => b.owner === 0) || G.nearest(G.people, c.x, c.z, 20, (p) => p.owner === 0 && !p.inside);
         if (t && dist(c.x, c.z, pc.x, pc.z) < 70) { if (goTo(G, c, t.x, t.z, dt, targetRadius(t))) attack(G, c, t, dt); }
         else goTo(G, c, pc.x, pc.z, dt, 10);
@@ -294,7 +306,7 @@
       }
       default: {
         c.moving = false;
-        if (!c.goal || goTo(G, c, c.goal.x, c.goal.z, dt, 2)) { if (Math.random() < dt * 0.4) { const a = Math.random() * 6.28, r = 6 + Math.random() * 24; c.goal = { x: home.x + Math.sin(a) * r, z: home.z + Math.cos(a) * r }; } }
+        if (!c.goal || goTo(G, c, c.goal.x, c.goal.z, dt, 2)) { if (BW.rand() < dt * 0.4) { const a = BW.rand() * 6.28, r = 6 + BW.rand() * 24; c.goal = { x: home.x + Math.sin(a) * r, z: home.z + Math.cos(a) * r }; } }
         if (c.state !== 'idle') { c.state = 'idle'; }
       }
     }
@@ -311,16 +323,16 @@
       if (c.owner === 0) { playerCreature(G, c, dt); grow(G, c, dt * 0.0005); }
       else enemyCreature(G, c, dt);
       // Impress or frighten nearby enemy villagers by presence.
-      if (c.owner === 0 && Math.random() < dt) for (const t of G.enemyTowns()) { const cc = G.center(t); if (cc && dist(cc.x, cc.z, c.x, c.z) < 40) t.loyalty -= 0.3 * c.size; }
+      if (c.owner === 0 && BW.rand() < dt) for (const t of G.enemyTowns()) { const cc = G.center(t); if (cc && dist(cc.x, cc.z, c.x, c.z) < 40) t.loyalty -= 0.3 * c.size; }
       // Mesh sync
       c.y = G.groundY(c.x, c.z);
       const m = c._mesh;
       if (Math.abs((c._meshAlign || 0) - c.alignment) > 0.5) G._buildCreatureMesh(c);
       if (m) {
-        m.position.set(c.x, c.y, c.z); m.rotation.y = c.dir; m.scale.setScalar(c.size);
+        m.position.set(c.x, c.y, c.z); m.rotation.y = c.dir; m.scale.set(c.size, c.size * (1 + c.growth * 0.08), c.size);
         const parts = m.userData.parts;
         const swing = c.moving ? Math.sin(c.walkPhase * 2) * 0.6 : 0;
-        parts.legs.forEach((l, i) => { l.rotation.x = swing * (i % 2 ? 1 : -1); });
+        parts.legs.forEach((l, i) => { l.rotation.x = swing * (i % 2 ? 1 : -1); l.scale.y = 1 + c.growth * 0.12; });
         m.rotation.z = c.downed ? Math.PI / 2 : c.state === 'sleep' ? 0.4 : 0;
         m.position.y = c.y + (c.downed ? 0.8 * c.size : 0);
         if (parts.tail) parts.tail.rotation.y = Math.sin(G.time * 4) * 0.4;
@@ -345,5 +357,5 @@
     return false;
   }
 
-  Object.assign(BW, { updateCreatures, hurtCreature, creatureFeedback: feedback, feedCreature, creatureSetAction: setAction });
+  Object.assign(BW, { updateCreatures, hurtCreature, creatureFeedback: feedback, feedCreature, creatureSetAction: setAction, creatureObserve: observe });
 })(window.BW);

@@ -72,3 +72,173 @@ window.BW = window.BW || {};
 
   Object.assign(BW, { RNG, Noise, clamp, lerp, smoothstep, dist, dist2, angleLerp, fmt, uid, setUidFloor, Emitter });
 })(window.BW);
+
+// ---------------------------------------------------------------------------
+// Spatial hash for fast neighbourhood queries, and a grid A* pathfinder.
+// ---------------------------------------------------------------------------
+(function (BW) {
+  'use strict';
+
+  // Global seeded random: deterministic once a world exists (replays, seeds).
+  BW.rand = () => (BW.G && BW.G.rng ? BW.G.rng.next() : Math.random());
+
+  class Grid {
+    constructor(cell = 8) { this.cell = cell; this.map = new Map(); }
+    key(cx, cz) { return cx * 73856 + cz; }
+    clear() { this.map.clear(); }
+    insert(e) {
+      const cx = Math.floor(e.x / this.cell), cz = Math.floor(e.z / this.cell);
+      const k = this.key(cx, cz);
+      let b = this.map.get(k); if (!b) { b = []; this.map.set(k, b); }
+      b.push(e);
+    }
+    rebuild(list) { this.clear(); for (const e of list) this.insert(e); }
+    // Visit every entity within radius r of (x,z). fn returns true to stop.
+    each(x, z, r, fn) {
+      const c = this.cell;
+      const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c), z0 = Math.floor((z - r) / c), z1 = Math.floor((z + r) / c);
+      for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+        const b = this.map.get(this.key(cx, cz)); if (!b) continue;
+        for (let i = 0; i < b.length; i++) if (fn(b[i])) return;
+      }
+    }
+    nearest(x, z, maxD, filter) {
+      let best = null, bd = maxD * maxD;
+      // Expand in rings so small searches stay small.
+      let r = Math.min(maxD, this.cell * 2);
+      while (true) {
+        this.each(x, z, r, (e) => { if (filter && !filter(e)) return false; const d = (e.x - x) * (e.x - x) + (e.z - z) * (e.z - z); if (d < bd) { bd = d; best = e; } return false; });
+        if (best && bd <= r * r) return best;
+        if (r >= maxD) return best;
+        r = Math.min(maxD, r * 2);
+      }
+    }
+    inRadius(x, z, r, filter) {
+      const out = [], rr = r * r;
+      this.each(x, z, r, (e) => { if (filter && !filter(e)) return false; const d = (e.x - x) * (e.x - x) + (e.z - z) * (e.z - z); if (d < rr) out.push(e); return false; });
+      return out;
+    }
+  }
+
+  // Binary min-heap keyed on f.
+  class Heap {
+    constructor() { this.a = []; }
+    push(n) { const a = this.a; a.push(n); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (a[p].f <= a[i].f) break; [a[p], a[i]] = [a[i], a[p]]; i = p; } }
+    pop() { const a = this.a; const top = a[0]; const last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && a[l].f < a[m].f) m = l; if (r < a.length && a[r].f < a[m].f) m = r; if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } } return top; }
+    get size() { return this.a.length; }
+  }
+
+  // Walkability grid over the island. Cells: 0 = open, 1 = blocked, 2+ = gate owned by (v-2).
+  class NavGrid {
+    constructor(size, cell = 3) {
+      this.size = size; this.cell = cell; this.half = size / 2;
+      this.n = Math.ceil(size / cell);
+      this.cells = new Uint8Array(this.n * this.n);
+      this.cost = new Uint8Array(this.n * this.n).fill(10); // 10 = normal, 6 = road
+      this.version = 0;
+    }
+    toCell(x, z) { return [Math.floor((x + this.half) / this.cell), Math.floor((z + this.half) / this.cell)]; }
+    toWorld(cx, cz) { return { x: (cx + 0.5) * this.cell - this.half, z: (cz + 0.5) * this.cell - this.half }; }
+    idx(cx, cz) { return cz * this.n + cx; }
+    inside(cx, cz) { return cx >= 0 && cz >= 0 && cx < this.n && cz < this.n; }
+    // Rebuild from terrain and buildings.
+    rebuild(terrain, buildings) {
+      const n = this.n;
+      for (let cz = 0; cz < n; cz++) for (let cx = 0; cx < n; cx++) {
+        const w = this.toWorld(cx, cz);
+        this.cells[this.idx(cx, cz)] = terrain.heightAt(w.x, w.z) > 0.5 && terrain.inBounds(w.x, w.z) ? 0 : 1;
+        this.cost[this.idx(cx, cz)] = 10;
+      }
+      for (const b of buildings) this.stamp(b);
+      this.version++;
+    }
+    stamp(b) {
+      const def = BW.BUILDINGS[b.kind];
+      if (!def) return;
+      if (def.walkable && !def.road) return;
+      const thin = def.line || b.kind === 'gate';
+      const hw = def.w / 2 - (thin ? 0 : 0.2), hd = def.d / 2 - (thin ? 0 : 0.2);
+      const [x0, z0] = this.toCell(b.x - hw, b.z - hd), [x1, z1] = this.toCell(b.x + hw, b.z + hd);
+      for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
+        if (!this.inside(cx, cz)) continue;
+        // Big buildings block only cells whose centre is inside them, so the
+        // blocked area never spills past the walls; thin walls block any overlap.
+        if (!thin && !def.road) { const w = this.toWorld(cx, cz); if (Math.abs(w.x - b.x) > hw || Math.abs(w.z - b.z) > hd) continue; }
+        const i = this.idx(cx, cz);
+        if (def.road) { this.cost[i] = 6; continue; }
+        if (b.kind === 'gate') this.cells[i] = 2 + b.owner;
+        else this.cells[i] = 1;
+      }
+    }
+    passable(i, owner) { const v = this.cells[i]; return v === 0 || (v >= 2 && v - 2 === owner); }
+    walkableAt(x, z, owner) { const [cx, cz] = this.toCell(x, z); if (!this.inside(cx, cz)) return false; return this.passable(this.idx(cx, cz), owner); }
+    // Nearest passable cell to a point (for targets inside buildings).
+    nearestOpen(cx, cz, owner) {
+      if (this.inside(cx, cz) && this.passable(this.idx(cx, cz), owner)) return [cx, cz];
+      for (let r = 1; r < 8; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const x = cx + dx, z = cz + dz; if (this.inside(x, z) && this.passable(this.idx(x, z), owner)) return [x, z];
+      }
+      return null;
+    }
+    // A* from world (ax,az) to (bx,bz). Returns array of {x,z} waypoints (excluding start) or null.
+    find(ax, az, bx, bz, owner = -1, maxNodes = 6000) {
+      let [sx, sz] = this.toCell(ax, az); let [gx, gz] = this.toCell(bx, bz);
+      const s = this.nearestOpen(sx, sz, owner); const g = this.nearestOpen(gx, gz, owner);
+      if (!s || !g) return null;
+      [sx, sz] = s; [gx, gz] = g;
+      if (sx === gx && sz === gz) return [{ x: bx, z: bz }];
+      const n = this.n, N = n * n;
+      const gScore = this._g || (this._g = new Float32Array(N)); const came = this._came || (this._came = new Int32Array(N)); const closed = this._closed || (this._closed = new Uint8Array(N));
+      const stamp = (this._stamp = (this._stamp || 0) + 1); const seen = this._seen || (this._seen = new Uint32Array(N));
+      const heap = new Heap();
+      const start = this.idx(sx, sz), goal = this.idx(gx, gz);
+      const h = (i) => { const cx = i % n, cz = (i / n) | 0; const dx = Math.abs(cx - gx), dz = Math.abs(cz - gz); return (Math.max(dx, dz) + 0.41 * Math.min(dx, dz)) * 10; };
+      seen[start] = stamp; gScore[start] = 0; came[start] = -1; closed[start] = 0;
+      heap.push({ i: start, f: h(start) });
+      let expanded = 0, found = false;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+      while (heap.size) {
+        const cur = heap.pop(); const i = cur.i;
+        if (seen[i] === stamp && closed[i] === stamp % 255 + 1) continue;
+        closed[i] = stamp % 255 + 1;
+        if (i === goal) { found = true; break; }
+        if (++expanded > maxNodes) break;
+        const cx = i % n, cz = (i / n) | 0;
+        for (let d = 0; d < 8; d++) {
+          const nx = cx + dirs[d][0], nz = cz + dirs[d][1];
+          if (!this.inside(nx, nz)) continue;
+          const ni = this.idx(nx, nz);
+          if (!this.passable(ni, owner)) continue;
+          if (d >= 4) { // no corner cutting
+            if (!this.passable(this.idx(cx + dirs[d][0], cz), owner) || !this.passable(this.idx(cx, cz + dirs[d][1]), owner)) continue;
+          }
+          const step = (d >= 4 ? 1.414 : 1) * this.cost[ni];
+          const ng = gScore[i] + step;
+          if (seen[ni] !== stamp || ng < gScore[ni]) { seen[ni] = stamp; closed[ni] = 0; gScore[ni] = ng; came[ni] = i; heap.push({ i: ni, f: ng + h(ni) }); }
+        }
+      }
+      if (!found) return null;
+      const path = [];
+      for (let i = goal; i !== -1 && i !== start; i = came[i]) { const w = this.toWorld(i % n, (i / n) | 0); path.push({ x: w.x, z: w.z }); }
+      path.reverse();
+      path[path.length - 1] = { x: bx, z: bz };
+      // String-pull: drop waypoints with a clear straight line (cheap smoothing).
+      const out = [];
+      let from = { x: ax, z: az };
+      for (let k = 0; k < path.length; k++) {
+        const next = path[k + 1];
+        if (next && this.lineClear(from.x, from.z, next.x, next.z, owner)) continue;
+        out.push(path[k]); from = path[k];
+      }
+      return out;
+    }
+    lineClear(ax, az, bx, bz, owner) {
+      const d = Math.hypot(bx - ax, bz - az); const steps = Math.ceil(d / (this.cell * 0.5));
+      for (let i = 1; i < steps; i++) { const t = i / steps; if (!this.walkableAt(ax + (bx - ax) * t, az + (bz - az) * t, owner)) return false; }
+      return true;
+    }
+  }
+
+  Object.assign(BW, { Grid, NavGrid, Heap });
+})(window.BW);

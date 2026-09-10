@@ -71,6 +71,8 @@
       this.targetDist = clamp(this.targetDist, 14, 320);
       this.dist += (this.targetDist - this.dist) * Math.min(1, dt * 8);
       if (this.rotating) { this.yaw -= input.dx * 0.005; this.pitch = clamp(this.pitch + input.dy * 0.004, 0.25, 1.45); }
+      if (input.touchYaw) { this.yaw -= input.touchYaw; input.touchYaw = 0; }
+      if (input.touchPanX || input.touchPanY) { const s = this.dist * 0.0025; this.tx -= (input.touchPanX * rx + input.touchPanY * fx) * s; this.tz -= (input.touchPanX * rz + input.touchPanY * fz) * s; input.touchPanX = 0; input.touchPanY = 0; }
       // Grab-the-land panning: keep the anchor under the cursor.
       if (this.panAnchor) {
         const p = this.planePoint(input.mx, input.my, this.panAnchor.y);
@@ -94,13 +96,34 @@
   function bindInput(canvas) {
     input.canvas = canvas;
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('mousemove', (e) => { input.dx += e.clientX - input.mx; input.dy += e.clientY - input.my; input.mx = e.clientX; input.my = e.clientY; });
+    window.addEventListener('mousemove', (e) => { input.dx += e.clientX - input.mx; input.dy += e.clientY - input.my; input.mx = e.clientX; input.my = e.clientY; if (input.onMove) input.onMove(e); });
     canvas.addEventListener('mousedown', (e) => { input.buttons |= (1 << e.button); if (input.onDown) input.onDown(e); });
     window.addEventListener('mouseup', (e) => { input.buttons &= ~(1 << e.button); if (input.onUp) input.onUp(e); });
     canvas.addEventListener('wheel', (e) => { input.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
     window.addEventListener('keydown', (e) => { if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return; input.keys[e.code] = true; if (input.onKey) input.onKey(e); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault(); });
     window.addEventListener('keyup', (e) => { input.keys[e.code] = false; });
     window.addEventListener('blur', () => { input.keys = {}; input.buttons = 0; });
+    // Touch: one finger acts as the left button, two fingers pinch to zoom and twist to rotate.
+    let pinch = null;
+    const tpos = (t) => ({ x: t.clientX, y: t.clientY });
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) { const p = tpos(e.touches[0]); input.mx = p.x; input.my = p.y; input.dx = 0; input.dy = 0; input.buttons |= 1; if (input.onDown) input.onDown({ button: 0 }); }
+      else if (e.touches.length === 2) { if (input.buttons & 1) { input.buttons &= ~1; if (input.onUp) input.onUp({ button: 0 }); } const a = tpos(e.touches[0]), b = tpos(e.touches[1]); pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; }
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) { const p = tpos(e.touches[0]); input.dx += p.x - input.mx; input.dy += p.y - input.my; input.mx = p.x; input.my = p.y; }
+      else if (e.touches.length === 2 && pinch) {
+        const a = tpos(e.touches[0]), b = tpos(e.touches[1]); const d = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+        input.wheel += (pinch.d - d) * 4; input.touchYaw = (input.touchYaw || 0) + (ang - pinch.ang);
+        const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2; input.touchPanX = (input.touchPanX || 0) + (cx - pinch.cx); input.touchPanY = (input.touchPanY || 0) + (cy - pinch.cy);
+        pinch = { d, ang, cx, cy };
+      }
+    }, { passive: false });
+    const endTouch = (e) => { e.preventDefault(); if (e.touches.length === 0) { if (input.buttons & 1) { input.buttons &= ~1; if (input.onUp) input.onUp({ button: 0 }); } pinch = null; } };
+    canvas.addEventListener('touchend', endTouch, { passive: false });
+    canvas.addEventListener('touchcancel', endTouch, { passive: false });
   }
   // Called once per frame after everyone has consumed deltas.
   function endInputFrame() { input.dx = 0; input.dy = 0; }

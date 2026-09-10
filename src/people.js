@@ -10,22 +10,45 @@
 
   function isDay(G) { return G.tod > 0.23 && G.tod < 0.79; }
 
-  // Move p toward (x,z). Returns true once within r. Avoids water by steering.
+  // Move p toward (x,z). Returns true once within r. Uses the nav grid (A*)
+  // when the straight line is blocked, plain steering otherwise.
   function moveToward(G, p, x, z, dt, speed, r = 1.0) {
     const d = dist(p.x, p.z, x, z);
-    if (d <= r) return true;
-    let ang = Math.atan2(x - p.x, z - p.z);
+    if (d <= r) { p.path = null; return true; }
+    const nav = G.ensureNav();
+    if (nav.cost[nav.idx(...nav.toCell(p.x, p.z))] === 6) speed *= 1.4; // road
+    if (p.hurry > 0) speed *= 1.3;
+    if (p.age < 300 || p.age > 1500) speed *= 0.8;
+    const owner = p.owner === undefined ? -1 : p.owner;
+    // Targets inside a building (its centre) count as reached from its edge.
+    if (d <= r + 4 && !nav.walkableAt(x, z, owner)) { p.path = null; return true; }
+    // Path bookkeeping: recompute when the target moved or the nav grid changed.
+    if (p.path && (Math.abs(p.pathTx - x) > 2.5 || Math.abs(p.pathTz - z) > 2.5 || p.pathVer !== nav.version)) p.path = null;
+    if (!p.path && d > 4) {
+      if (nav.lineClear(p.x, p.z, x, z, owner)) p.path = [{ x, z }];
+      else if (!(p.pathFail > G.time)) { p.path = nav.find(p.x, p.z, x, z, owner); if (!p.path) p.pathFail = G.time + 2; }
+      if (p.path) { p.pathTx = x; p.pathTz = z; p.pathVer = nav.version; }
+    }
+    let gx = x, gz = z;
+    if (p.path && p.path.length) {
+      const wp = p.path[0];
+      if (dist(p.x, p.z, wp.x, wp.z) < 1.0 && p.path.length > 1) p.path.shift();
+      gx = p.path[0].x; gz = p.path[0].z;
+    }
+    let ang = Math.atan2(gx - p.x, gz - p.z);
     const step = Math.min(speed * dt, d);
     const T = G.terrain;
+    const escaping = !nav.walkableAt(p.x, p.z, owner); // standing inside something: walk out
     for (const off of [0, 0.7, -0.7, 1.4, -1.4, 2.2, -2.2]) {
       const a = ang + off;
       const nx = p.x + Math.sin(a) * step, nz = p.z + Math.cos(a) * step;
-      if (T.heightAt(nx, nz) > 0.5 && T.inBounds(nx, nz)) {
+      if (T.heightAt(nx, nz) > 0.5 && T.inBounds(nx, nz) && (escaping || nav.walkableAt(nx, nz, owner))) {
         p.x = nx; p.z = nz; p.dir = BW.angleLerp(p.dir, a, 0.35); p.y = G.groundY(p.x, p.z);
         return false;
       }
     }
-    return false; // stuck; try again next frame
+    p.path = null; // stuck: replan next frame
+    return false;
   }
 
   function findFreeHouse(G, town) {
@@ -42,7 +65,10 @@
     G.remove(p);
     if (town && town.owner === 0) {
       G.god.deaths = (G.god.deaths || 0) + 1;
-      if (cause === 'starved' && (!G.lastStarveMsg || G.time - G.lastStarveMsg > 20)) { G.lastStarveMsg = G.time; G.say('A villager starved to death. Build more fields and assign farmers.', 'bad'); }
+      if (cause === 'starved' && (!G.lastStarveMsg || G.time - G.lastStarveMsg > 20)) { G.lastStarveMsg = G.time; G.say('A villager starved to death. Build more fields and assign farmers.', 'bad'); BW.advise && BW.advise(G, 'starve'); }
+      if (cause === 'old age' && (!G.lastAgeMsg || G.time - G.lastAgeMsg > 60)) { G.lastAgeMsg = G.time; G.say(`${p.name} died of old age, aged ${Math.floor(p.age / 300)} years.`, 'info'); }
+      if (cause === 'plague' && (!G.lastPlagueMsg || G.time - G.lastPlagueMsg > 30)) { G.lastPlagueMsg = G.time; G.say('Plague claims a villager. Cast Heal on the sick.', 'bad'); }
+      if (cause === 'cold' && (!G.lastColdMsg || G.time - G.lastColdMsg > 30)) { G.lastColdMsg = G.time; G.say('A villager froze. Keep wood in store through winter.', 'bad'); }
     }
     BW.audio.play('death');
   }
@@ -95,7 +121,7 @@
 
     const town = G.ents.get(p.town);
     if (!town || !town.alive) { // wild: wander sadly
-      if (p.timer > 3) { p.timer = 0; p.tx = p.x + (Math.random() - 0.5) * 12; p.tz = p.z + (Math.random() - 0.5) * 12; }
+      if (p.timer > 3) { p.timer = 0; p.tx = p.x + (BW.rand() - 0.5) * 12; p.tz = p.z + (BW.rand() - 0.5) * 12; }
       moveToward(G, p, p.tx, p.tz, dt, 3, 1);
       p.hunger += dt * 0.3; if (p.hunger > 100) { p.health -= dt; if (p.health <= 0) die(G, p, 'starved'); }
       return;
@@ -103,7 +129,16 @@
     const center = G.center(town);
 
     // Needs
-    p.hunger += dt * (p.inside || p.state === 'sleep' ? 0.15 : p.job === 'worshipper' ? 0.85 : p.job === 'soldier' ? 0.35 : 0.5);
+    let hungerRate = p.inside || p.state === 'sleep' ? 0.15 : p.job === 'worshipper' ? 0.85 : p.job === 'soldier' ? 0.35 : 0.5;
+    if (p.trait === 'hardy') hungerRate *= 0.7;
+    if (G.season === 'winter') hungerRate *= 1.2;
+    p.hunger += dt * hungerRate;
+    if (p.job === 'soldier') p.hunger = Math.min(p.hunger, 90); // soldiers forage; they never starve
+    if (p.hurry > 0) p.hurry -= dt;
+    if (p.sick > 0) { p.sick -= dt; p.health -= dt * 0.25; if (p.health <= 0) { die(G, p, 'plague'); return; } if (BW.rand() < dt * 0.02) { const q = G.nearest(G.people, p.x, p.z, 4, (o) => o !== p && o.sick <= 0 && o.town === p.town); if (q) q.sick = 90; } }
+    if (p.age > p.lifespan) { die(G, p, 'old age'); return; }
+    if (town.owner === 0 && G.season === 'winter' && town.wood <= 0 && !p.inside) { p.health -= dt * 0.15; p.cold = 1; if (p.health <= 0) { die(G, p, 'cold'); return; } } else p.cold = 0;
+    updateNeeds(G, p, town, dt);
     if (p.hunger >= 100) { p.hunger = 100; p.health -= dt * 0.7; if (p.health <= 0) { die(G, p, 'starved'); return; } }
     else if (p.health < p.maxHealth) p.health = Math.min(p.maxHealth, p.health + dt * 0.4);
 
@@ -116,6 +151,7 @@
     }
 
     if (p.job === 'soldier') return; // army.js drives soldiers
+    if (p.age < 300 && p.job !== 'idle') { p.job = 'idle'; p.workId = 0; } // children play
 
     // Sleep at night in a house.
     const day = isDay(G);
@@ -128,12 +164,12 @@
       if (p.state !== 'sleepwalk') {
         const h = findFreeHouse(G, town);
         if (h) { p.state = 'sleepwalk'; p.sleepId = h.id; h.garrison++; }
-        else { p.state = 'sleep'; }
+        else { p.state = 'sleep'; p.slept = 0; }
       }
       if (p.state === 'sleepwalk') {
         const h = G.ents.get(p.sleepId);
         if (!h || h.dead) { p.state = 'idle'; return; }
-        if (moveToward(G, p, h.x, h.z, dt, p.speed, 2.2)) { p.inside = true; p.workIdBackup = p.workId; p.workId = h.id; p.state = 'sleep'; }
+        if (moveToward(G, p, h.x, h.z, dt, p.speed, 2.2)) { p.inside = true; p.workIdBackup = p.workId; p.workId = h.id; p.state = 'sleep'; p.slept = 1; }
         return;
       }
       if (p.state === 'sleep' && p.hunger < 85) return;
@@ -165,17 +201,19 @@
     }
   }
 
+  function workRate(G, p) { let r = 1; if (p.trait === 'strong') r *= 1.3; if (p.hurry > 0) r *= 2; if (p.age > 1500) r *= 0.7; if (p.happy < 0.4) r *= 0.75; return r; }
+
   function goDeposit(G, p, center, dt) {
     if (!center) { p.carry = null; return true; }
     p.state = 'walk';
-    if (moveToward(G, p, center.x, center.z, dt, p.speed, 6)) { deposit(G, p, G.ents.get(p.town)); p.state = 'idle'; BW.audio && Math.random() < 0.2 && BW.audio.play('drop'); return true; }
+    if (moveToward(G, p, center.x, center.z, dt, p.speed, 6)) { deposit(G, p, G.ents.get(p.town)); p.state = 'idle'; BW.audio && BW.rand() < 0.2 && BW.audio.play('drop'); return true; }
     return false;
   }
 
   function doIdle(G, p, town, center, dt) {
     if (!center) return;
     if (dist(p.x, p.z, center.x, center.z) > 24) { p.state = 'walk'; moveToward(G, p, center.x, center.z, dt, p.speed, 12); return; }
-    if (p.timer > 2 + Math.random() * 3) { p.timer = 0; const a = Math.random() * 6.28, r = 5 + Math.random() * 12; p.tx = center.x + Math.sin(a) * r; p.tz = center.z + Math.cos(a) * r; p.state = 'walk'; }
+    if (p.timer > 2 + BW.rand() * 3) { p.timer = 0; const a = BW.rand() * 6.28, r = 5 + BW.rand() * 12; p.tx = center.x + Math.sin(a) * r; p.tz = center.z + Math.cos(a) * r; p.state = 'walk'; }
     if (p.state === 'walk' && moveToward(G, p, p.tx, p.tz, dt, p.speed * 0.6, 1)) p.state = 'idle';
   }
 
@@ -194,7 +232,7 @@
     p.state = 'walk';
     if (moveToward(G, p, f.x + Math.sin(p.id) * 2, f.z + Math.cos(p.id) * 2, dt, p.speed, 1.2)) {
       p.state = 'work'; p.dir += dt * 0.5;
-      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1));
+      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
       f._dirty = true;
       if (f.crop >= 1) { f.crop = 0.05; p.carry = { kind: 'food', amount: 28 }; G.particles.burst(f.x, f.y + 1, f.z, 8, 2, 0.6, 0xe0c040, 1.2, 2); }
     }
@@ -214,7 +252,7 @@
     p.state = 'walk';
     if (moveToward(G, p, t.x, t.z, dt, p.speed, 1.6)) {
       if (p.state !== 'work') { p.state = 'work'; p.workTimer = 0; }
-      p.workTimer += dt;
+      p.workTimer += dt * workRate(G, p);
       if (p.workTimer >= (kind === 'tree' ? 4 : 5)) {
         p.workTimer = 0;
         if (kind === 'tree') {
@@ -247,10 +285,10 @@
     p.state = 'walk';
     if (moveToward(G, p, s.x + Math.sin(p.id) * (def.w / 2 + 1), s.z + Math.cos(p.id) * (def.d / 2 + 1), dt, p.speed, 1.2)) {
       p.state = 'work';
-      s.progress += dt / def.buildTime;
+      s.progress += dt / def.buildTime * workRate(G, p);
       s.hp = Math.min(s.maxHp, s.hp + dt / def.buildTime * s.maxHp * 0.8);
       s._dirty = true;
-      if (Math.random() < dt * 3) G.particles.burst(s.x + (Math.random() - 0.5) * def.w, s.y + 2, s.z + (Math.random() - 0.5) * def.d, 2, 1.5, 0.4, 0xffd080, 1, 3);
+      if (BW.rand() < dt * 3) G.particles.burst(s.x + (BW.rand() - 0.5) * def.w, s.y + 2, s.z + (BW.rand() - 0.5) * def.d, 2, 1.5, 0.4, 0xffd080, 1, 3);
       if (s.progress >= 1) BW.completeBuilding(G, s);
     }
   }
@@ -263,7 +301,7 @@
       h = houses[p.id % houses.length]; p.workId = h.id;
     }
     if (dist(p.x, p.z, h.x, h.z) > 6) { p.state = 'walk'; moveToward(G, p, h.x, h.z, dt, p.speed, 4); return; }
-    if (p.timer > 3) { p.timer = 0; p.tx = h.x + (Math.random() - 0.5) * 7; p.tz = h.z + (Math.random() - 0.5) * 7; p.state = 'walk'; }
+    if (p.timer > 3) { p.timer = 0; p.tx = h.x + (BW.rand() - 0.5) * 7; p.tz = h.z + (BW.rand() - 0.5) * 7; p.state = 'walk'; }
     if (p.state === 'walk' && moveToward(G, p, p.tx, p.tz, dt, p.speed * 0.5, 0.8)) p.state = 'idle';
   }
 
@@ -279,23 +317,48 @@
     if (moveToward(G, p, a.x + Math.sin(ang) * 3.4, a.z + Math.cos(ang) * 3.4, dt, p.speed, 0.8)) {
       p.state = 'work'; p.dir = Math.atan2(a.x - p.x, a.z - p.z);
       if (town.owner === 0) {
-        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1);
+        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1) * (p.trait === 'pious' ? 1.5 : 1) * (0.6 + 0.6 * (town.happiness === undefined ? 0.8 : town.happiness));
         G.god.prayer = Math.min(G.god.maxPrayer, G.god.prayer + rate * dt);
       } else {
         town.loyalty = Math.min(100, town.loyalty + dt * 0.08);
       }
-      if (Math.random() < dt * 0.6) G.particles.spawn(p.x, p.y + 1.8, p.z, 0, 1.5, 0, 1.2, 0xffe9a0, 1.5);
+      if (BW.rand() < dt * 0.6) G.particles.spawn(p.x, p.y + 1.8, p.z, 0, 1.5, 0, 1.2, 0xffe9a0, 1.5);
     }
+  }
+
+  function updateNeeds(G, p, town, dt) {
+    const n = p.needs;
+    n.food = clamp(1 - p.hunger / 100, 0, 1);
+    n.home = town.cap ? clamp(town.cap / Math.max(1, town.pop || 1), 0, 1) : 0;
+    n.worship = town.hasAltar ? 1 : 0.35;
+    n.safety = clamp(1 - (town.fearRecent || 0) / 60, 0, 1) * (p.sick > 0 ? 0.5 : 1);
+    n.rest = p.slept ? 1 : 0.5;
+    p.happy = n.food * 0.35 + n.home * 0.2 + n.worship * 0.15 + n.safety * 0.2 + n.rest * 0.1;
+    if (p.trait === 'pious' && !town.hasAltar) p.happy -= 0.1;
+    // The loudest unmet need becomes a visible desire.
+    let worst = null, wv = 0.45;
+    for (const k in n) if (n[k] < wv) { wv = n[k]; worst = k; }
+    if (p.sick > 0) worst = 'sick';
+    if (p.cold) worst = 'cold';
+    p.desire = worst || '';
   }
 
   function updatePeople(G, dt) {
     for (const b of G.buildings) if (b.kind === 'house') b.garrison = 0;
     for (const p of G.people) if (p.inside) { const h = G.ents.get(p.workId); if (h) h.garrison++; }
     for (const p of G.people) if (p.state === 'sleepwalk') { const h = G.ents.get(p.sleepId); if (h) h.garrison++; }
-    // Iterate over a copy: people may die during the update.
+    // Iterate over a copy: people may die during the update. Villagers far
+    // from the camera tick every third frame with a scaled dt (simulation LOD).
     const list = G.people.slice();
-    for (const p of list) if (!p.dead) updatePerson(G, p, dt);
+    const cam = G.camera; const cx = cam ? cam.tx : 0, cz = cam ? cam.tz : 0;
+    const near2 = 260 * 260; const frame = G.frame;
+    for (const p of list) {
+      if (p.dead) continue;
+      const far = (p.x - cx) * (p.x - cx) + (p.z - cz) * (p.z - cz) > near2;
+      if (far) { if ((frame + p.id) % 3 !== 0) continue; updatePerson(G, p, dt * 3); }
+      else updatePerson(G, p, dt);
+    }
   }
 
-  Object.assign(BW, { updatePeople, moveToward, die, hurt, scare, isDay, countJobs });
+  Object.assign(BW, { updatePeople, moveToward, die, hurt, scare, isDay, countJobs, workRate });
 })(window.BW);
