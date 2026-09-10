@@ -115,6 +115,10 @@
         if (b.hp <= 0) { destroyBuilding(G, b, b._lastAttacker); continue; }
       }
       if (b.rain > 0) b.rain -= dt;
+      if (b.kind === 'house' && b.built && (G.season === 'winter' || !BW.isDay(G)) && BW.rand() < dt * 1.5) {
+        const cs = Math.cos(b.rot), sn = Math.sin(b.rot); const lx = 1.2, lz = 1.0;
+        G.particles.spawn(b.x + lx * cs + lz * sn, b.y + 4.3, b.z - lx * sn + lz * cs, (BW.rand() - 0.5) * 0.3, 0.9 + BW.rand() * 0.5, (BW.rand() - 0.5) * 0.3, 3.5, 0x555555, 2.6, -0.05);
+      }
       if (b.kind === 'field' && b.built) {
         if (G.weather.kind === 'rain' || G.weather.kind === 'storm') b.rain = Math.max(b.rain || 0, 1);
         let grow = b.rain > 0 ? 0.02 : 0.003;

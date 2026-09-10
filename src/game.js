@@ -20,13 +20,14 @@
       this.fpsT = 0; this.frames = 0;
       this.running = false;
       BW.input.onKey = (e) => this.onKey(e);
-      this.ui.mainMenu();
+      this.showMainMenu();
       requestAnimationFrame((t) => this.frame(t));
     }
 
     hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
 
     newCampaign(species, landIndex = 0, skirmish = false, opts = null) {
+      this.demo = false;
       this.profile = { species, landIndex, alignment: 0, tribute: skirmish ? 14 : 0, unlocks: {}, creature: null, skirmish, custom: opts };
       this.startLand(landIndex);
     }
@@ -71,6 +72,7 @@
         for (const s of this.G.god.shields) if (s._mesh) this.gfx.world.remove(s._mesh);
         if (this.G.terrain) { this.gfx.world.remove(this.G.terrain.group); this.G.terrain.dispose(); }
         if (this.G.inflRing) this.gfx.world.remove(this.G.inflRing);
+        if (this.G.grass) this.gfx.world.remove(this.G.grass.mesh);
         if (this.hand) { this.gfx.scene.remove(this.hand.mesh); this.gfx.world.remove(this.hand.ring); this.gfx.world.remove(this.hand.selRing); if (this.hand.ghost) this.gfx.world.remove(this.hand.ghost); }
       }
     }
@@ -114,6 +116,7 @@
       c.leash = 'free';
       // Influence ring
       G.inflRing = BW.groundRing(G.god.influence, 0xffe9a0, 160); this.gfx.world.add(G.inflRing);
+      G.grass = new BW.Grass(6000); this.gfx.world.add(G.grass.mesh);
       G.god.influence = 45;
       G.season = 'spring';
       terrain.recolor(G.god.alignment, 'spring');
@@ -179,9 +182,13 @@
       if (this.fpsT > 1) { document.getElementById('fps').textContent = Math.round(this.frames / this.fpsT) + ' fps'; this.frames = 0; this.fpsT = 0; }
       if (!this.G) return;
       const G = this.G;
+      if (this.demo) { this.camera.yaw += dt * 0.06; const t = G.playerTown(); if (t) { this.camera.tx += (t.x - this.camera.tx) * dt; this.camera.tz += (t.z - this.camera.tz) * dt; } }
       this.camera.update(dt);
       G.terrain.updateChunks(this.camera.cam.position.x, this.camera.cam.position.z, this.camera.cam.position.y);
-      this.hand.update(dt);
+      G.grass.update(G.terrain, this.camera.tx, this.camera.tz, dt, G.terrain.palette, G.season);
+      const wu = G.terrain.water.userData.uniforms; wu.time.value += dt; wu.sunDir.value.copy(this.gfx.sun.position).sub(this.gfx.sunTarget.position).normalize(); wu.fogColor.value.copy(this.gfx.scene.fog.color); wu.fogNear.value = this.gfx.scene.fog.near; wu.fogFar.value = this.gfx.scene.fog.far;
+      this.gfx.scene.fog.near = 200 + this.camera.dist * 0.8; this.gfx.scene.fog.far = 700 + this.camera.dist * 1.5;
+      if (!this.demo) this.hand.update(dt); else this.hand.mesh.visible = false;
       if (this.running && !this.paused) {
         for (let s = 0; s < this.speed; s++) this.simulate(dt);
       }
@@ -193,7 +200,7 @@
       const pt = G.playerTown();
       if (pt) { const c = G.center(pt); if (c) BW.updateRing(G.inflRing, c.x, c.z, G.god.influence, G.terrain, 0.5); G.inflRing.material.opacity = 0.35 + Math.sin(G.time * 2) * 0.1; }
       this.gfx.render();
-      this.ui.update(dt);
+      if (!this.demo) this.ui.update(dt);
       BW.endInputFrame();
     }
 
@@ -223,6 +230,7 @@
           BW.audio.play('thud');
         }
       }
+      if (this.demo) return;
       // Objectives / victory
       if (!G.won && G.time > 5 && G.enemyTowns().length === 0) this.onVictory();
       if (G.time - (G.lastAutosave || 0) > 120) { G.lastAutosave = G.time; this.save(true); }
@@ -246,7 +254,17 @@
       this.ui.victory(stats, isLast, () => { if (isLast) this.showMainMenu(); else { this.profile.landIndex++; this.startLand(this.profile.landIndex); } });
     }
     onDefeat() { this.running = false; BW.audio.play('lose'); this.ui.defeat(() => this.startLand(this.profile.landIndex), () => this.showMainMenu()); }
-    showMainMenu() { this.running = false; this.teardown(); this.G = null; BW.G = null; this.ui.mainMenu(); }
+    // The menu floats over a small living island that the camera slowly orbits.
+    showMainMenu() {
+      this.running = false; this.teardown(); this.G = null; BW.G = null;
+      this.profile = { species: 'ape', landIndex: 0, alignment: 0, tribute: 0, unlocks: {}, creature: null, custom: null };
+      const demo = { name: 'Demo', seed: 4242, size: 240, intro: '', player: { x: -40, z: 20, pop: 14 }, enemies: [{ name: 'Aztec', x: 60, z: -30, pop: 12, aggression: 0, color: 2 }], objectives: [], treeDensity: 1.2, custom: true };
+      this.profile.customLand = demo; this.profile.custom = { seed: 4242, size: 240, tribes: 1 };
+      this.buildLand(demo, 0);
+      this.demo = true; this.running = true; this.paused = false;
+      this.camera.targetDist = this.camera.dist = 95; this.camera.pitch = 0.62;
+      this.ui.mainMenu();
+    }
 
     storeProfile() {
       const G = this.G, c = G.playerCreature();
@@ -266,7 +284,7 @@
       let data;
       try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
       if (!data) { if (this.G) this.G.say('No save found.', 'warn'); return; }
-      this.profile = data.profile;
+      this.profile = data.profile; this.demo = false;
       const land = this.landFor(data.world.landIndex);
       this.running = false;
       document.getElementById('loading').classList.add('show');
@@ -289,7 +307,7 @@
 
     // ------------------------------------------------------------ keys
     onKey(e) {
-      const G = this.G; if (!G || !this.running) return;
+      const G = this.G; if (!G || !this.running || this.demo) return;
       const k = e.code;
       const tabs = { KeyB: 'build', KeyM: 'miracles', KeyC: 'creature', KeyT: 'army', KeyU: 'tribute' };
       if (tabs[k]) return this.ui.toggleTab(tabs[k]);

@@ -113,6 +113,26 @@ villagers on it to found a second town.
 unlocks and your creature's training carry over. Skirmish takes a seed, a map size (up to a
 "vast" 800-unit island) and one to five rival tribes, so every seed is a new island you can share.
 
+## Look and feel
+
+- **The hand** is a rounded palm with jointed fingers and a thumb, a faint sleeve of light, an
+  orb while casting, claws when you turn evil, and a golden glow when you turn good. It banks as
+  it moves, wiggles when idle, and leaves sparkles when swept quickly.
+- **Villagers** are articulated figures with skin and hair variety, a team-coloured headband, a
+  job-coloured tunic, and tools. They swing arms and legs when walking, chop and hammer at work,
+  raise their arms in worship, carry loads in front of them, look around and wave when idle, and
+  wear helmets and shields as soldiers. Children are small, elders grey and stooped. A floating
+  icon shows their loudest unmet need.
+- **Creatures** have capsule bodies, big blinking eyes, ears, wagging tails and species details
+  (mane, horns, spots, shell). They breathe, bob as they walk, watch your hand when it is near,
+  tilt their heads with their mood, and speak in a bubble.
+- **The world** has a gradient sky with sun, moon, stars and drifting clouds, wave-shader water
+  with sun glints, two kinds of trees, swaying grass around the camera, house windows that glow
+  at night and chimneys that smoke in winter.
+- **The interface** uses rendered 3D icons for buildings and creature portraits, a living island
+  behind the main menu, a hover highlight under anything you can grab, a first-steps checklist on
+  the first land, and resource icons in the town panel.
+
 ## Under the hood
 
 - **Chunked terrain with LOD.** The island is a 2-unit heightfield; the mesh is split into 32-cell

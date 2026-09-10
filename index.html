@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dominion — a browser god game</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,15 +20,16 @@
   <div id="townpanel" class="panel">
     <h3 id="townname">Town</h3>
     <div class="row"><span>Population</span><b id="pop">0 / 0</b></div>
-    <div class="row"><span>Food</span><b id="food">0</b></div>
-    <div class="row"><span>Wood</span><b id="wood">0</b></div>
-    <div class="row"><span>Ore</span><b id="ore">0</b></div>
+    <div class="row"><span><i class="ico food"></i>Food</span><b id="food">0</b></div>
+    <div class="row"><span><i class="ico wood"></i>Wood</span><b id="wood">0</b></div>
+    <div class="row"><span><i class="ico ore"></i>Ore</span><b id="ore">0</b></div>
     <div class="row"><span>Impressiveness</span><b id="impress">0</b></div>
     <div class="row"><span>Happiness</span><b id="happy">-</b></div>
     <div class="jobs" id="jobs"></div>
     <label style="display:block;margin-top:6px;font-size:12px"><input type="checkbox" id="autojobs" checked> Auto-assign jobs</label>
   </div>
   <div id="objectives" class="panel"><h3>Objectives</h3><ul id="objlist"></ul><div id="enemytowns"></div></div>
+  <div id="tutorial" class="panel hidden"><h3>First steps</h3><ul id="tutlist"></ul></div>
   <div id="messages"></div>
   <div id="tooltip"></div>
   <div id="buildinginfo" class="panel"></div>

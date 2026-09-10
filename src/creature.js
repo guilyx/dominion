@@ -319,6 +319,7 @@
       if (c.hunger >= 100 && c.owner === 0) { c.health -= dt * 0.6; if (c.health <= 0) hurtCreature(G, c, 1, -1); }
       else if (c.health < c.maxHealth && !c.downed) c.health = Math.min(c.maxHealth, c.health + dt * 0.5);
       if (c.speakT > 0) { c.speakT -= dt; if (c.speakT <= 0) c.speak = ''; }
+      if (c.mood) c.mood *= Math.max(0, 1 - dt * 0.02);
       if (c.hurtFlash > 0) c.hurtFlash -= dt;
       if (c.owner === 0) { playerCreature(G, c, dt); grow(G, c, dt * 0.0005); }
       else enemyCreature(G, c, dt);
@@ -329,14 +330,23 @@
       const m = c._mesh;
       if (Math.abs((c._meshAlign || 0) - c.alignment) > 0.5) G._buildCreatureMesh(c);
       if (m) {
-        m.position.set(c.x, c.y, c.z); m.rotation.y = c.dir; m.scale.set(c.size, c.size * (1 + c.growth * 0.08), c.size);
-        const parts = m.userData.parts;
+        const t = G.time, parts = m.userData.parts, mood = c.mood || 0;
+        m.rotation.y = c.dir; m.scale.set(c.size, c.size * (1 + c.growth * 0.08), c.size);
         const swing = c.moving ? Math.sin(c.walkPhase * 2) * 0.6 : 0;
         parts.legs.forEach((l, i) => { l.rotation.x = swing * (i % 2 ? 1 : -1); l.scale.y = 1 + c.growth * 0.12; });
         m.rotation.z = c.downed ? Math.PI / 2 : c.state === 'sleep' ? 0.4 : 0;
-        m.position.y = c.y + (c.downed ? 0.8 * c.size : 0);
-        if (parts.tail) parts.tail.rotation.y = Math.sin(G.time * 4) * 0.4;
-        parts.head.rotation.x = c.state.startsWith('eat') ? 0.5 : 0;
+        const bob = c.moving ? Math.abs(Math.sin(c.walkPhase * 2)) * 0.12 * c.size : 0;
+        m.position.set(c.x, c.y + bob + (c.downed ? 0.8 * c.size : 0), c.z);
+        parts.body.scale.y = 1 + Math.sin(t * 2.1 + c.id) * 0.025; // breathing
+        if (parts.tailSegs) { const wag = 3 + Math.max(0, mood) * 6 + (c.moving ? 3 : 0); parts.tailSegs.forEach((s, i) => { s.rotation.y = Math.sin(t * wag + i * 0.8) * (0.35 + Math.max(0, mood) * 0.2); s.rotation.x = -0.25 + (i ? 0 : mood * 0.4); }); }
+        // Eyes: blink now and then, close when asleep or knocked out.
+        const blink = c.state === 'sleep' || c.downed ? 0.08 : ((t * 1.3 + c.id) % 4.7) < 0.14 ? 0.1 : 1;
+        for (const e of parts.eyes) e.scale.y = blink;
+        // Head: eating bobs, mood tilts, and it watches the hand when it is close.
+        let hx = 0, hy = c.state.startsWith('eat') ? 0.45 + Math.sin(t * 8) * 0.15 : mood < -0.3 ? 0.3 : mood > 0.3 ? -0.15 : 0;
+        const hand = G.hand; if (hand && hand.hover && c.owner === 0 && !c.downed) { const d = dist(hand.hover.x, hand.hover.z, c.x, c.z); if (d < 28) { const a = Math.atan2(hand.hover.x - c.x, hand.hover.z - c.z) - c.dir; hx = clamp(Math.atan2(Math.sin(a), Math.cos(a)), -0.9, 0.9); } }
+        parts.head.rotation.y += (hx - parts.head.rotation.y) * Math.min(1, 6 * dt);
+        parts.head.rotation.x += (hy - parts.head.rotation.x) * Math.min(1, 6 * dt);
         const fl = c.hurtFlash > 0;
         m.traverse((o) => { if (o.material && o.material.emissive) { if (fl) { o.userData.em = o.userData.em || o.material.emissive.getHex(); } } });
         if (fl) { parts.body.material = BW.mat(0xff4444); } else if (parts.body.userData.baseMat) parts.body.material = parts.body.userData.baseMat;
