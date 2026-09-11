@@ -363,8 +363,10 @@
       $('m-shadows').onclick = () => { g.shadows = !g.shadows; g.gfx.setShadows(g.shadows); this.renderTab(); };
       $('m-mute').onclick = () => { BW.audio.init(); BW.audio.setMuted(!BW.audio.muted); this.renderTab(); };
       $('m-help').onclick = () => this.toggleHelp();
-      $('m-restart').onclick = () => { if (confirm('Restart this land?')) g.startLand(g.profile.landIndex); };
-      $('m-main').onclick = () => { if (confirm('Return to the main menu? Unsaved progress is lost.')) g.showMainMenu(); };
+      // Browser dialogs are blocked in some embeds, so confirmation is a second click.
+      const arm = (btn, label, fn) => { btn.onclick = () => { if (btn.dataset.armed) { btn.dataset.armed = ''; fn(); return; } btn.dataset.armed = '1'; const old = btn.textContent; btn.textContent = label; setTimeout(() => { if (btn.isConnected) { btn.dataset.armed = ''; btn.textContent = old; } }, 8000); }; };
+      arm($('m-restart'), 'Click again to restart', () => g.startLand(g.profile.landIndex));
+      arm($('m-main'), 'Click again to quit (unsaved progress is lost)', () => g.showMainMenu());
     }
 
     showBuilding(b) {
