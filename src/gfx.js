@@ -54,8 +54,8 @@
       this.scene.background = new THREE.Color(0x9fc4e8);
       this.scene.fog = new THREE.Fog(0x9fc4e8, 250, 700);
       this.camera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
-      this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a6a3a, 0.7);
-      this.sun = new THREE.DirectionalLight(0xfff4e0, 1.1);
+      this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3f4a2c, 0.55);
+      this.sun = new THREE.DirectionalLight(0xfff4e0, 1.35);
       this.sun.castShadow = true;
       this.sun.shadow.mapSize.set(2048, 2048);
       const sc = this.sun.shadow.camera;
@@ -85,7 +85,7 @@
       const sx = Math.cos(ang) * 200, sy = Math.max(elev, 0.08) * 220 + 30, sz = 90;
       this.sun.position.set(focus.x + sx, sy, focus.z + sz);
       this.sunTarget.position.set(focus.x, 0, focus.z);
-      this.sun.intensity = 0.15 + day * 1.05;
+      this.sun.intensity = 0.15 + day * 1.3;
       const evil = clamp(-alignment, 0, 1);
       const skyDay = new THREE.Color(0x9fc4e8).lerp(new THREE.Color(0xb59aa0), evil * 0.6);
       const skyDusk = new THREE.Color(0xe39a5a).lerp(new THREE.Color(0x8a2a2a), evil * 0.6);
@@ -95,7 +95,7 @@
       this.scene.background.copy(sky);
       this.scene.fog.color.copy(sky);
       this.sun.color.set(0xfff4e0).lerp(new THREE.Color(0xff9a50), dusk * 0.7);
-      this.hemi.intensity = 0.25 + day * 0.5;
+      this.hemi.intensity = 0.2 + day * 0.4;
       this.hemi.groundColor.set(evil > 0.5 ? 0x5a3a3a : 0x5a6a3a);
       this.sky.update(t, day, dusk, evil, sky, focus, this.camera);
       windowMat.emissiveIntensity = (1 - day) * 1.4;
@@ -212,8 +212,8 @@
     const trunk = new THREE.CylinderGeometry(0.2, 0.34, 1.8, 6);
     const c1 = new THREE.ConeGeometry(1.5, 2.6, 7), c2 = new THREE.ConeGeometry(1.1, 2.2, 7);
     return new Crowd([
-      { geo: trunk, mat: new THREE.MeshLambertMaterial({ color: 0x6b4a2a }), offsetY: 0.9, colored: false },
-      { geo: c1, mat: new THREE.MeshLambertMaterial({ color: 0xffffff }), offsetY: 2.6, colored: true },
+      { geo: trunk, mat: new THREE.MeshLambertMaterial({ color: 0x4e3620 }), offsetY: 0.9, colored: false },
+      { geo: c1, mat: new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }), offsetY: 2.6, colored: true },
       { geo: c2, mat: new THREE.MeshLambertMaterial({ color: 0xffffff }), offsetY: 4.1, colored: true },
     ], max);
   }
@@ -222,8 +222,8 @@
     const can = new THREE.SphereGeometry(1.7, 9, 7); can.scale(1, 0.85, 1);
     const can2 = new THREE.SphereGeometry(1.1, 8, 6);
     return new Crowd([
-      { geo: trunk, mat: new THREE.MeshLambertMaterial({ color: 0x7a5a3a }), offsetY: 1.1, colored: false },
-      { geo: can, mat: new THREE.MeshLambertMaterial({ color: 0xffffff }), offsetY: 3.2, colored: true },
+      { geo: trunk, mat: new THREE.MeshLambertMaterial({ color: 0x5a4028 }), offsetY: 1.1, colored: false },
+      { geo: can, mat: new THREE.MeshLambertMaterial({ color: 0xd0d0d0 }), offsetY: 3.2, colored: true },
       { geo: can2, mat: new THREE.MeshLambertMaterial({ color: 0xffffff }), offsetY: 4.3, colored: true },
     ], max);
   }
@@ -373,6 +373,21 @@
         break;
       }
     }
+    // Higher levels get taller and gain ornaments so growth is visible at a glance.
+    const level = b.level || 1;
+    if (level >= 2) {
+      const hh = (BW.BUILDING_HEIGHT[b.kind] || 4);
+      if (b.kind === 'house') { g.add(box(3.4, 1.8, 3.4, 0xd8c6a0, 0, hh - 0.6, 0)); g.add(cone(2.8, 1.5, 4, roof, 0, hh + 1.1, 0, Math.PI / 4)); g.add(win(0.6, 0.6, 0, hh - 0.6, 1.72)); }
+      else if (b.kind === 'field') { for (let i = 0; i < 2; i++) g.add(box(0.15, 0.15, 5.6, 0x8a6a3a, -1.4 + i * 2.8, 1.05, 0)); g.add(cyl(0.6, 0.6, 1.2, 8, 0x7a6a5a, 2.5, 0.6, -2.5)); }
+      else if (b.kind === 'altar') { for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; g.add(cyl(0.12, 0.12, 4.5, 5, 0x5a3a1a, Math.cos(a) * 2.9, 2.2, Math.sin(a) * 2.9)); g.add(box(0.08, 1.2, 0.9, roof, Math.cos(a) * 2.9, 3.6, Math.sin(a) * 2.9)); } }
+      else if (b.kind === 'center') { g.add(cyl(0.12, 0.12, 8, 6, 0x5a3a1a, 0, 15, 0)); g.add(box(0.1, 1.6, 2.6, level >= 3 ? 0xf5d76e : roof, 0, 18, 1.3)); }
+      else if (b.kind === 'storehouse') { g.add(box(4, 1.6, 4, 0x9a7a4a, 0, hh + 0.2, 0)); g.add(cone(3.2, 1.3, 4, roof, 0, hh + 1.6, 0, Math.PI / 4)); }
+      else if (b.kind === 'mine') { g.add(cyl(0.3, 0.3, 4, 6, 0x4a3a2a, -1.8, 3.5, -0.8)); g.add(box(3, 0.3, 0.3, 0x4a3a2a, -0.5, 5.4, -0.8)); }
+      else if (b.kind === 'lodge') { g.add(box(2.6, 1.4, 2.6, 0x7a4a22, 0, hh + 0.2, 0)); g.add(cone(2.4, 1.2, 4, roof, 0, hh + 1.4, 0, Math.PI / 4)); }
+      else if (b.kind === 'armory') { g.add(box(2.4, 2.4, 2.4, 0x7a7a82, 0, hh + 1, 0)); g.add(cone(1.9, 1.2, 4, roof, 0, hh + 2.7, 0, Math.PI / 4)); }
+      else if (b.kind === 'tower') { g.add(cyl(1.5, 1.5, 3, 8, 0x8a8a90, 0, hh + 1.2, 0)); g.add(cone(2.0, 1.6, 8, roof, 0, hh + 3.4, 0)); }
+    }
+    if (level >= 3) { const flag = box(0.06, 1.0, 1.6, 0xf5d76e, 0, (BW.BUILDING_HEIGHT[b.kind] || 4) + 5.2, 0); flag.name = 'flag'; g.add(flag); g.add(cyl(0.06, 0.06, 4, 5, 0x5a3a1a, 0, (BW.BUILDING_HEIGHT[b.kind] || 4) + 3.5, -0.8)); }
     g.userData.entityId = b.id;
     // Construction scaffold, hidden once built.
     const sc = new THREE.Mesh(boxGeo(def.w + 0.6, 4, def.d + 0.6), new THREE.MeshBasicMaterial({ color: 0xffd080, wireframe: true, transparent: true, opacity: 0.6 }));

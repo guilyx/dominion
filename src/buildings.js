@@ -19,9 +19,10 @@
     const tiled = !def.line && kind !== 'gate';
     if (tiled) { const h = BW.hex.toHex(x, z); for (const b of G.buildings) { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') continue; const bh = BW.hex.toHex(b.x, b.z); if (bh.q === h.q && bh.r === h.r) return 'Tile occupied'; } }
     const pad = def.line || kind === 'gate' ? 0 : 0.6;
+    if (def.road) { for (const b of G.buildings) if (BW.BUILDINGS[b.kind].road && Math.abs(x - b.x) < 2 && Math.abs(z - b.z) < 2) return 'Road already here'; }
     for (const b of G.buildings) {
       const d = BW.BUILDINGS[b.kind];
-      if (d.road && def.road) continue;
+      if (d.road || def.road) continue; // roads run under everything
       const bp = d.line || b.kind === 'gate' ? 0 : pad;
       if (Math.abs(x - b.x) < hw + d.w / 2 + bp - 0.05 && Math.abs(z - b.z) < hd + d.d / 2 + bp - 0.05) return 'Overlaps a building';
     }
@@ -129,7 +130,7 @@
       }
       if (b.kind === 'field' && b.built) {
         if (G.weather.kind === 'rain' || G.weather.kind === 'storm') b.rain = Math.max(b.rain || 0, 1);
-        let grow = (b.rain > 0 ? 0.02 : 0.003) * (BW.BIOME_GROWTH[b.biome] || 1);
+        let grow = (b.rain > 0 ? 0.02 : 0.003) * (BW.BIOME_GROWTH[b.biome] || 1) * BW.UPGRADE.yield[(b.level || 1) - 1];
         if (G.season === 'winter') grow *= 0.15; else if (G.weather.kind === 'drought') grow *= 0.4;
         if (b.crop < 1) { b.crop = Math.min(1, b.crop + grow * dt); if (BW.rand() < dt) b._dirty = true; }
       }
@@ -137,14 +138,15 @@
         b.timer += dt;
         if (b.timer > 0.9) {
           b.timer = 0;
-          let target = G.nearest(G.people, b.x, b.z, 18, (p) => p.owner !== b.owner && (p.job === 'soldier' || G.ents.get(p.town) && G.ents.get(p.town).owner !== b.owner) && !p.inside);
+          const lvl = BW.UPGRADE.yield[(b.level || 1) - 1];
+          let target = G.nearest(G.people, b.x, b.z, 18 * lvl, (p) => p.owner !== b.owner && (p.job === 'soldier' || G.ents.get(p.town) && G.ents.get(p.town).owner !== b.owner) && !p.inside);
           let isCreature = false;
           const c = G.nearest(G.creatures, b.x, b.z, 22, (cr) => cr.owner !== b.owner);
           if (c && (!target || dist2(c.x, c.z, b.x, b.z) < dist2(target.x, target.z, b.x, b.z))) { target = c; isCreature = true; }
           if (target) {
             const dx = target.x - b.x, dz = target.z - b.z, dy = (target.y + 1) - (b.y + 9), l = Math.hypot(dx, dy, dz);
             for (let k = 0; k < 6; k++) G.particles.spawn(b.x + dx / l * k * 2, b.y + 9 + dy / l * k * 2, b.z + dz / l * k * 2, dx / l * 30, dy / l * 30, dz / l * 30, 0.25, 0xffffff, 1.2);
-            if (isCreature) BW.hurtCreature(G, target, 6, b.owner); else BW.hurt(G, target, 7, b.owner);
+            if (isCreature) BW.hurtCreature(G, target, 6 * lvl, b.owner); else BW.hurt(G, target, 7 * lvl, b.owner);
           }
         }
       }
@@ -187,6 +189,42 @@
     return null;
   }
 
+  // Upgrades: pay now, builders raise the level over time.
+  function upgradeCost(b) { const def = BW.BUILDINGS[b.kind]; const mul = BW.UPGRADE.costMul[b.level] || 0; const c = {}; for (const k in def.cost) c[k] = Math.round(def.cost[k] * mul); if (b.kind === 'center') { c.stone = (c.stone || 0) + 120 * b.level; c.gold = (c.gold || 0) + 20 * b.level; } return c; }
+  function canUpgrade(b) { return BW.UPGRADABLE.includes(b.kind) && b.built && !b.upgrading && (b.level || 1) < BW.UPGRADE.maxLevel; }
+  function startUpgrade(G, b) {
+    const town = G.ents.get(b.town); if (!town || !canUpgrade(b)) return false;
+    const cost = upgradeCost(b);
+    if (!G.canAfford(town, cost)) { if (town.owner === 0) G.say('Upgrade costs ' + Object.entries(cost).map(([k, v]) => v + ' ' + k).join(', ') + '.', 'warn'); return false; }
+    G.pay(town, cost); b.upgrading = true; b.progress = 0; b._dirty = true;
+    if (town.owner === 0) { G.say(`${BW.BUILDINGS[b.kind].name} upgrade started. Builders will raise it to level ${b.level + 1}.`, 'info'); BW.audio.play('place'); }
+    return true;
+  }
+  function finishUpgrade(G, b) {
+    b.upgrading = false; b.level = (b.level || 1) + 1; b.progress = 1;
+    const def = BW.BUILDINGS[b.kind]; b.maxHp = Math.round(def.hp * BW.UPGRADE.hp[b.level - 1]); b.hp = b.maxHp;
+    G._buildBuildingMesh(b); G.navDirty = true;
+    G.particles.burst(b.x, b.y + 4, b.z, 40, 5, 1.2, 0xffe9a0, 1.8, 2, 3);
+    if (b.owner === 0) { BW.audio.play('build'); G.say(`${def.name} is now level ${b.level}.`, 'good'); }
+  }
+  // Assign or release workers for a building from the town's idle pool.
+  function assignWorkers(G, b, delta) {
+    const town = G.ents.get(b.town); if (!town) return;
+    const job = (!b.built || b.upgrading) ? 'builder' : BW.WORKER_JOB[b.kind];
+    if (!job) return;
+    const workers = G.people.filter((p) => p.town === town.id && p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id));
+    const max = job === 'builder' ? 6 : (BW.WORKER_SLOTS[b.kind] || [3, 3, 3])[(b.level || 1) - 1];
+    if (delta > 0) {
+      if (workers.length >= max) { G.say('No more room for workers there.', 'warn'); return; }
+      const pool = G.people.filter((p) => p.town === town.id && p.age >= 300 && !p.held && !p.inside && p.job !== 'soldier' && (p.job === 'idle' || p.job === 'breeder') && !(p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id)));
+      pool.sort((p, q) => (p.job === 'idle' ? 0 : 1) - (q.job === 'idle' ? 0 : 1) || BW.dist2(p.x, p.z, b.x, b.z) - BW.dist2(q.x, q.z, b.x, b.z));
+      const p = pool[0]; if (!p) { G.say('No idle villagers. Free someone up first (drop them on the temple).', 'warn'); return; }
+      p.job = job; p.state = 'idle'; p.path = null; if (job === 'forester') { p.baseId = b.id; p.workId = 0; } else p.workId = b.id;
+    } else if (workers.length) {
+      const p = workers[workers.length - 1]; p.job = 'idle'; p.workId = 0; p.baseId = 0; p.state = 'idle';
+    }
+  }
+
   // Lay a stretch of wall or road between two points; pays per segment.
   function placeLine(G, kind, town, ax, az, bx, bz) {
     const def = BW.BUILDINGS[kind];
@@ -204,5 +242,5 @@
   }
 
   BW.hexOccupied = (G, q, r) => G.buildings.some((b) => { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') return false; const h = BW.hex.toHex(b.x, b.z); return h.q === q && h.r === r; });
-  Object.assign(BW, { footprintOk, placeBuilding, completeBuilding, damageBuilding, destroyBuilding, igniteBuilding, igniteTree, updateBuildings, findSpot, placeLine, foundSettlement });
+  Object.assign(BW, { footprintOk, placeBuilding, completeBuilding, damageBuilding, destroyBuilding, igniteBuilding, igniteTree, updateBuildings, findSpot, placeLine, foundSettlement, upgradeCost, canUpgrade, startUpgrade, finishUpgrade, assignWorkers });
 })(window.BW);

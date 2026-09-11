@@ -111,6 +111,8 @@
         else if (m.type === 'miracle') { const d = BW.MIRACLES[m.kind]; text = `<b>Casting ${d.name}</b> (${d.cost} prayer) · click inside your influence · Shift keep casting · Esc cancel`; }
         else if (m.type === 'army') text = '<b>Commanding platoon</b> · click ground to move, click an enemy to attack · Esc cancel';
         else if (m.type === 'send') text = '<b>Sending creature</b> · click where it should go · Esc cancel';
+        else if (m.type === 'creatureAttack') text = '<b>Creature: attack</b> · click an enemy building, soldier or creature · Esc cancel';
+        else if (m.type === 'creatureGuard') text = '<b>Creature: guard</b> · click a spot to hold · Esc cancel';
         bar.innerHTML = text; bar.classList.add('open');
       } else {
         bar.classList.remove('open');
@@ -268,16 +270,22 @@
           <button id="cr-free" class="${c.leash === 'free' ? 'active' : ''}">Roam free</button>
           <button id="cr-stay" class="${c.leash === 'stay' ? 'active' : ''}">Stay</button>
           <button id="cr-send" class="${this.hand.mode && this.hand.mode.type === 'send' ? 'active' : ''}">Send to…</button>
+          <button id="cr-attack" class="${this.hand.mode && this.hand.mode.type === 'creatureAttack' ? 'active' : ''}" title="Then click an enemy building, soldier or creature">⚔ Attack…</button>
+          <button id="cr-guard" class="${this.hand.mode && this.hand.mode.type === 'creatureGuard' ? 'active' : ''}" title="Then click a spot to hold">🛡 Guard…</button>
+          ${c.command ? '<button id="cr-cancel">Cancel order</button>' : ''}
           <button id="cr-find">Find (F)</button>
         </div>
         <div class="learned">${learned.map((k) => `<div title="${esc(BW.CREATURE_ACTION_NAMES[k] || k)}"><span>${esc(BW.CREATURE_ACTION_NAMES[k] || k)}</span>${bar(c.learned[k], 'cr-l-' + k)}</div>`).join('')}</div>
-        <div class="desc">Stroke it (hold and move the hand over it) to reward, tap it to punish. Reward what you want more of. It learns miracles by watching you cast them nearby once you unlock Creature miracles.</div></div>`;
+        <div class="desc">Stroke it (hold and move the hand over it) to reward, tap it to punish. Reward what you want more of. <b>Attack…</b> then click an enemy; <b>Guard…</b> then click a spot (it fights anything hostile that comes near). Hotkeys: K attack, G guard. It learns miracles by watching you cast them nearby once you unlock Creature miracles.</div></div>`;
       $('cr-reward').onclick = () => BW.creatureFeedback(G, c, +1);
       $('cr-punish').onclick = () => BW.creatureFeedback(G, c, -1);
-      $('cr-follow').onclick = () => { c.leash = 'follow'; c.sendGoal = null; this.renderTab(); };
-      $('cr-free').onclick = () => { c.leash = 'free'; this.renderTab(); };
-      $('cr-stay').onclick = () => { c.leash = 'stay'; c.sendGoal = null; c.state = 'idle'; this.renderTab(); };
+      $('cr-follow').onclick = () => { c.leash = 'follow'; c.sendGoal = null; c.command = null; this.renderTab(); };
+      $('cr-free').onclick = () => { c.leash = 'free'; c.command = null; this.renderTab(); };
+      $('cr-stay').onclick = () => { c.leash = 'stay'; c.sendGoal = null; c.command = null; c.state = 'idle'; this.renderTab(); };
       $('cr-send').onclick = () => this.hand.setMode(this.hand.mode && this.hand.mode.type === 'send' ? null : { type: 'send' });
+      $('cr-attack').onclick = () => this.hand.setMode(this.hand.mode && this.hand.mode.type === 'creatureAttack' ? null : { type: 'creatureAttack' });
+      $('cr-guard').onclick = () => this.hand.setMode(this.hand.mode && this.hand.mode.type === 'creatureGuard' ? null : { type: 'creatureGuard' });
+      const cc = $('cr-cancel'); if (cc) cc.onclick = () => { c.command = null; c.state = 'idle'; this.renderTab(); };
       $('cr-find').onclick = () => this.game.camera.lookAt(c.x, c.z);
     }
 
@@ -353,6 +361,7 @@
         <button id="m-pause">${g.paused ? 'Resume' : 'Pause'} (P)</button>
         <button id="m-speed">Speed: ${g.speed}x</button>
         <button id="m-shadows">Shadows: ${g.shadows ? 'on' : 'off'}</button>
+        <button id="m-edge">Edge scroll: ${g.camera.edgeScroll ? 'on' : 'off'}</button>
         <button id="m-mute">Sound: ${BW.audio.muted ? 'off' : 'on'}</button>
         <button id="m-help">Controls</button>
         <button id="m-restart" class="danger">Restart land</button>
@@ -368,6 +377,7 @@
       $('m-pause').onclick = () => { g.togglePause(); this.renderTab(); };
       $('m-speed').onclick = () => { g.speed = g.speed === 1 ? 2 : g.speed === 2 ? 3 : 1; this.renderTab(); };
       $('m-shadows').onclick = () => { g.shadows = !g.shadows; g.gfx.setShadows(g.shadows); this.renderTab(); };
+      $('m-edge').onclick = () => { g.camera.edgeScroll = !g.camera.edgeScroll; try { localStorage.setItem('dominion_edge', g.camera.edgeScroll ? '1' : '0'); } catch (e) { /* ignore */ } this.renderTab(); };
       $('m-mute').onclick = () => { BW.audio.init(); BW.audio.setMuted(!BW.audio.muted); this.renderTab(); };
       $('m-help').onclick = () => this.toggleHelp();
       // Browser dialogs are blocked in some embeds, so confirmation is a second click.
@@ -397,9 +407,15 @@
         ${b.kind === 'house' ? `<div>${b.garrison} sleeping inside</div>` : ''}
         ${b.kind === 'altar' ? `<div>${workers} worshippers</div>` : ''}
         <div class="muted" style="margin-top:4px">${esc(d.desc)}</div>
+        ${b.owner === 0 && (BW.WORKER_JOB[b.kind] || !b.built || b.upgrading) ? (() => { const job = (!b.built || b.upgrading) ? 'builder' : BW.WORKER_JOB[b.kind]; const n = G.people.filter((p) => p.town === b.town && p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id)).length; const max = job === 'builder' ? 6 : (BW.WORKER_SLOTS[b.kind] || [3, 3, 3])[(b.level || 1) - 1]; const idle = G.people.filter((p) => p.town === b.town && p.job === 'idle' && p.age >= 300).length; return `<div class="assign"><span>${BW.JOB_NAMES[job]}s</span><button id="bi-minus" ${n ? '' : 'disabled'}>−</button><b>${n} / ${max}</b><button id="bi-plus" ${n >= max ? 'disabled' : ''}>+</button><small>${idle} idle</small></div>`; })() : ''}
+        ${b.owner === 0 && BW.canUpgrade(b) ? `<button id="bi-upgrade" style="margin-top:6px" title="${esc(Object.entries(BW.upgradeCost(b)).map(([k, v]) => v + ' ' + k).join(', '))}">Upgrade to level ${(b.level || 1) + 1} (${Object.entries(BW.upgradeCost(b)).map(([k, v]) => v + ' ' + k).join(', ')})</button>` : ''}
+        ${b.upgrading ? `<div>Upgrading to level ${b.level + 1}: ${Math.round(b.progress * 100)}%</div>` : b.level > 1 ? `<div>Level ${b.level}</div>` : ''}
         ${b.owner === 0 && b.kind !== 'center' ? '<button id="bi-demolish" class="danger" style="margin-top:6px">Demolish</button>' : ''}
         ${b.owner === 0 && b.kind === 'armory' && b.built ? '<button id="bi-train" style="margin-top:6px">Train swordsmen</button>' : ''}
         ${b.owner === 0 && b.kind === 'altar' && b.built ? '<button id="bi-sac" class="danger" style="margin-top:6px" title="Sacrifice a worshipper for 90 prayer. Evil.">Sacrifice a worshipper</button>' : ''}`;
+      const plus = $('bi-plus'); if (plus) plus.onclick = () => { BW.assignWorkers(G, b, +1); this.showBuilding(b); BW.audio.play('ui'); };
+      const minus = $('bi-minus'); if (minus) minus.onclick = () => { BW.assignWorkers(G, b, -1); this.showBuilding(b); BW.audio.play('ui'); };
+      const up = $('bi-upgrade'); if (up) up.onclick = () => { if (BW.startUpgrade(G, b)) this.showBuilding(b); };
       const dem = $('bi-demolish'); if (dem) dem.onclick = () => { const t = G.ents.get(b.town); if (t) { for (const k in d.cost) t[k] += Math.floor(d.cost[k] * 0.5); } BW.destroyBuilding(G, b, 0); this.hideBuilding(); };
       const tr = $('bi-train'); if (tr) tr.onclick = () => { BW.trainPlatoon(G, town); };
       const sac = $('bi-sac'); if (sac) sac.onclick = () => { const w = G.nearest(G.people, b.x, b.z, 8, (p) => p.town === b.town && p.job === 'worshipper'); if (w) BW.sacrifice(G, w, b); else G.say('No worshipper at the altar to sacrifice.', 'warn'); };

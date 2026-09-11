@@ -58,7 +58,7 @@
 
     update(dt) {
       const k = input.keys;
-      const sp = this.dist * 0.9 * dt;
+      const sp = this.dist * 0.9 * dt * (k.ShiftLeft || k.ShiftRight ? 2 : 1);
       const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
       const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
       if (k.KeyW || k.ArrowUp) { this.tx += fx * sp; this.tz += fz * sp; }
@@ -67,8 +67,20 @@
       if (k.KeyD || k.ArrowRight) { this.tx += rx * sp; this.tz += rz * sp; }
       if (k.KeyQ) this.yaw += 1.5 * dt;
       if (k.KeyE) this.yaw -= 1.5 * dt;
-      if (input.wheel) { this.targetDist *= Math.pow(1.0015, input.wheel); input.wheel = 0; }
+      if (input.wheel) {
+        const before = this.targetDist;
+        this.targetDist = clamp(this.targetDist * Math.pow(1.0015, input.wheel), 14, 320); input.wheel = 0;
+        // Zoom towards the ground under the cursor, like map apps do.
+        if (this.targetDist < before) { const p = this.groundPoint(input.mx, input.my); if (p) { const f = 1 - this.targetDist / before; this.tx += (p.x - this.tx) * f; this.tz += (p.z - this.tz) * f; } }
+      }
       this.targetDist = clamp(this.targetDist, 14, 320);
+      // Edge scrolling (toggle in the menu): pointer within 14 px of the window edge.
+      if (this.edgeScroll && !this.panAnchor && !this.rotating && document.hasFocus()) {
+        const m = 14, es = this.dist * 0.7 * dt; let ex = 0, ez = 0;
+        if (input.mx < m) ex = -1; else if (input.mx > window.innerWidth - m) ex = 1;
+        if (input.my < m) ez = 1; else if (input.my > window.innerHeight - m) ez = -1;
+        if (ex || ez) { this.tx += (fx * ez + rx * ex) * es; this.tz += (fz * ez + rz * ex) * es; }
+      }
       this.dist += (this.targetDist - this.dist) * Math.min(1, dt * 8);
       if (this.rotating) { this.yaw -= input.dx * 0.005; this.pitch = clamp(this.pitch + input.dy * 0.004, 0.25, 1.45); }
       if (input.touchYaw) { this.yaw -= input.touchYaw; input.touchYaw = 0; }

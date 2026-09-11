@@ -30,9 +30,9 @@ quick-save / quick-load.
 
 | Action | Input |
 | --- | --- |
-| Pan | Left-drag on the land (grab and pull), Shift+drag anywhere, or WASD / arrow keys |
+| Pan | Left-drag on the land (grab and pull), Shift+drag or middle-drag anywhere, WASD / arrow keys (Shift doubles speed), or push the pointer against the screen edge |
 | Rotate / tilt | Right-drag, middle-drag, Ctrl+drag, Q / E |
-| Zoom | Mouse wheel |
+| Zoom | Mouse wheel, towards the cursor |
 | Pick up | Left-click a villager, tree, rock or resource heap (inside your influence) |
 | Drop / throw | Release. Flick the mouse while releasing to throw |
 | Reward creature | Hold the button on it and move (stroke) |
@@ -48,6 +48,7 @@ quick-save / quick-load.
 | Gesture casting | Alt+drag: circle = Water, V = Heal, zigzag = Fireball, vertical = Lightning, horizontal = Shield |
 | Walls and roads | Pick them in Build, then drag a line on the ground |
 | Minimap | Click to jump the camera |
+| Creature orders | `K` then click an enemy to attack; `G` then click a spot to guard (also in the Creature tab) |
 | Photo mode | `Y` hides the interface |
 | Help overlay | `H` |
 
@@ -55,10 +56,17 @@ Touch works too: one finger pans or grabs, two fingers pinch to zoom and twist t
 
 ## How it works
 
-**Building** is on a hex grid: pick a building and the ghost snaps to the nearest tile, one building per tile, with the grid shown around your cursor while you place. Walls, gates and roads are free-form lines. The menu tucks away while you place so you can see the ground.
+**Building** is on a hex grid: pick a building and the ghost snaps to the nearest tile, one building per tile, with the grid shown around your cursor while you place. Walls, gates and roads are free-form lines, and roads can run under buildings. The menu tucks away while you place so you can see the ground.
 
 **Villagers** eat, sleep in houses at night, and work a job. Drop a villager on a field, house,
-altar, armoury, construction site, tree or rock to give them that job. "Auto-assign jobs" lets
+altar, armoury, mine, lodge, construction site, tree or rock to give them that job, or click a
+building and use the + / − controls to staff it from the idle pool.
+
+**Upgrades.** Temples, houses, fields, altars, lodges, mines, storehouses, armouries and towers
+have three levels. Click a building and pay the upgrade; builders raise it over time. Each level
+scales the building up to fill more of its hex, adds ornaments, and multiplies what it does:
+capacity, storage, crop growth, ore yield, prayer, tower range. A level-3 temple widens your
+influence. "Auto-assign jobs" lets
 the town manage itself; turn it off for full control. Food comes from fields, wood from trees,
 and stone, iron and gold from rocks and veins; everything is stored in your temple. Drop heaps on
 the temple to store them.

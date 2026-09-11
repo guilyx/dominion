@@ -53,7 +53,7 @@
 
   function findFreeHouse(G, town) {
     let best = null;
-    for (const b of G.buildings) if (b.town === town.id && b.kind === 'house' && b.built && b.garrison < 5) { best = b; break; }
+    for (const b of G.buildings) if (b.town === town.id && b.kind === 'house' && b.built && b.garrison < Math.round(5 * BW.UPGRADE.capacity[(b.level || 1) - 1])) { best = b; break; }
     return best;
   }
 
@@ -232,7 +232,7 @@
     p.state = 'walk';
     if (moveToward(G, p, f.x + Math.sin(p.id) * 2, f.z + Math.cos(p.id) * 2, dt, p.speed, 1.2)) {
       p.state = 'work'; p.dir += dt * 0.5;
-      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (BW.BIOME_GROWTH[f.biome] || 1) * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
+      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (BW.BIOME_GROWTH[f.biome] || 1) * BW.UPGRADE.yield[(f.level || 1) - 1] * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
       f._dirty = true;
       if (f.crop >= 1) { f.crop = 0.05; p.carry = { kind: 'food', amount: 28 }; G.particles.burst(f.x, f.y + 1, f.z, 8, 2, 0.6, 0xe0c040, 1.2, 2); }
     }
@@ -245,7 +245,9 @@
     const ok = (e) => e && !e.dead && (kind === 'tree' ? (e.wood > 0 && e.fire <= 0 && !e.burnt) : e.ore > 0);
     if (!ok(t) || t.type !== kind) {
       if (!center) { p.job = 'idle'; return; }
-      t = G.nearest(list, center.x, center.z, 110, kind === 'tree' ? (e) => ok(e) && e.size >= 0.6 : ok);
+      const base = kind === 'tree' && p.baseId ? G.ents.get(p.baseId) : null;
+      t = base && !base.dead ? G.nearest(list, base.x, base.z, 26, (e) => ok(e) && e.size >= 0.6) : null;
+      if (!t) t = G.nearest(list, center.x, center.z, 110, kind === 'tree' ? (e) => ok(e) && e.size >= 0.6 : ok);
       if (!t) { p.job = 'idle'; if (town.owner === 0 && (!G.lastNoRes || G.time - G.lastNoRes > 30)) { G.lastNoRes = G.time; G.say(kind === 'tree' ? "No trees left near your town. Build a Woodcutter's lodge so the forest regrows." : 'No rocks left near your town. Build a Mine next to a vein.', 'warn'); } return; }
       p.workId = t.id;
     }
@@ -276,18 +278,27 @@
     else {
       p.state = 'work';
       p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
-      if (p.workTimer >= 5) { p.workTimer = 0; p.carry = { kind: mine.vein || 'stone', amount: mine.vein === 'gold' ? 4 : mine.vein === 'iron' ? 6 : 8 }; G.particles.burst(mine.x, mine.y + 2, mine.z, 6, 2, 0.5, BW.RES_COLORS[mine.vein] || 0xbbbbcc, 1, 3); p.state = 'idle'; }
+      if (p.workTimer >= 5) { p.workTimer = 0; p.carry = { kind: mine.vein || 'stone', amount: Math.round((mine.vein === 'gold' ? 4 : mine.vein === 'iron' ? 6 : 8) * BW.UPGRADE.yield[(mine.level || 1) - 1]) }; G.particles.burst(mine.x, mine.y + 2, mine.z, 6, 2, 0.5, BW.RES_COLORS[mine.vein] || 0xbbbbcc, 1, 3); p.state = 'idle'; }
     }
   }
 
   function doBuilder(G, p, town, center, dt) {
     let s = G.ents.get(p.workId);
-    if (!s || s.dead || s.type !== 'building' || (s.built && s.hp >= s.maxHp)) {
-      s = G.nearest(G.buildings, p.x, p.z, 400, (b) => b.town === town.id && !b.built) || G.nearest(G.buildings, p.x, p.z, 400, (b) => b.town === town.id && b.built && b.hp < b.maxHp * 0.8 && b.fire <= 0);
+    if (!s || s.dead || s.type !== 'building' || (s.built && !s.upgrading && s.hp >= s.maxHp)) {
+      s = G.nearest(G.buildings, p.x, p.z, 400, (b) => b.town === town.id && (!b.built || b.upgrading)) || G.nearest(G.buildings, p.x, p.z, 400, (b) => b.town === town.id && b.built && b.hp < b.maxHp * 0.8 && b.fire <= 0);
       if (!s) { p.job = 'idle'; return; }
       p.workId = s.id;
     }
     const def = BW.BUILDINGS[s.kind];
+    if (s.upgrading) {
+      p.state = 'walk';
+      if (moveToward(G, p, s.x + Math.sin(p.id) * (def.w / 2 + 1), s.z + Math.cos(p.id) * (def.d / 2 + 1), dt, p.speed, 1.2)) {
+        p.state = 'work'; s.progress += dt / BW.UPGRADE.time[s.level] * workRate(G, p); s._dirty = true;
+        if (BW.rand() < dt * 3) G.particles.burst(s.x + (BW.rand() - 0.5) * def.w, s.y + 3, s.z + (BW.rand() - 0.5) * def.d, 2, 1.5, 0.4, 0xffd080, 1, 3);
+        if (s.progress >= 1) BW.finishUpgrade(G, s);
+      }
+      return;
+    }
     if (s.built) { // repair
       p.state = 'walk';
       if (moveToward(G, p, s.x + Math.sin(p.id) * (def.w / 2 + 1), s.z + Math.cos(p.id) * (def.d / 2 + 1), dt, p.speed, 1.2)) { p.state = 'work'; s.hp = Math.min(s.maxHp, s.hp + dt * s.maxHp / def.buildTime * 0.5); s._dirty = true; }
@@ -328,7 +339,7 @@
     if (moveToward(G, p, a.x + Math.sin(ang) * 3.4, a.z + Math.cos(ang) * 3.4, dt, p.speed, 0.8)) {
       p.state = 'work'; p.dir = Math.atan2(a.x - p.x, a.z - p.z);
       if (town.owner === 0) {
-        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1) * (p.trait === 'pious' ? 1.5 : 1) * (0.6 + 0.6 * (town.happiness === undefined ? 0.8 : town.happiness));
+        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1) * (p.trait === 'pious' ? 1.5 : 1) * (0.6 + 0.6 * (town.happiness === undefined ? 0.8 : town.happiness)) * BW.UPGRADE.yield[(a.level || 1) - 1];
         G.god.prayer = Math.min(G.god.maxPrayer, G.god.prayer + rate * dt);
       } else {
         town.loyalty = Math.min(100, town.loyalty + dt * 0.08);

@@ -17,7 +17,7 @@
     const idle = people.filter((p) => p.job === 'idle' && !p.held && !p.thrown);
     if (!idle.length) return;
     const fields = G.buildings.filter((b) => b.town === town.id && b.kind === 'field' && b.built).length;
-    const sites = G.buildings.filter((b) => b.town === town.id && (!b.built || b.hp < b.maxHp * 0.8)).length;
+    const sites = G.buildings.filter((b) => b.town === town.id && (!b.built || b.upgrading || b.hp < b.maxHp * 0.8)).length;
     const altars = G.buildings.filter((b) => b.town === town.id && b.kind === 'altar' && b.built).length;
     const houses = G.buildings.filter((b) => b.town === town.id && b.kind === 'house' && b.built).length;
     const pop = people.length;
@@ -126,10 +126,14 @@
       else if (pop > 28 && !count('wonder') && town.stone >= 320 && town.gold >= 120) kind = 'wonder';
       else if (!count('storehouse') && (town.wood > town.cap_ * 0.85 || town.food > town.cap_ * 0.85) && town.wood >= 120) kind = 'storehouse';
       else if (town.wood >= 60 && count('house') < pop / 4) kind = 'house';
+      if (!kind && sites === 0 && rng.next() < 0.5) {
+        const cand = bs.filter((b) => BW.canUpgrade(b) && b.kind !== 'center');
+        if (cand.length) { const b = cand[Math.floor(rng.next() * cand.length)]; const cost = BW.upgradeCost(b); let rich = true; for (const k in cost) if ((town[k] || 0) < cost[k] * 2) rich = false; if (rich) BW.startUpgrade(G, b); }
+      }
       if (kind) {
         let spot;
         if (kind === 'mine') { const v = G.nearest(G.rocks, center.x, center.z, 45); spot = v && BW.findSpot(G, kind, town, v.x, v.z, 4, 9, rng); }
-        else spot = BW.findSpot(G, kind, town, center.x, center.z, 9, 12 + Math.min(30, count('house') * 3 + count('field') * 3), rng);
+        else spot = BW.findSpot(G, kind, town, center.x, center.z, 12, 16 + Math.min(36, count('house') * 4 + count('field') * 4), rng);
         if (spot) { G.pay(town, BW.BUILDINGS[kind].cost); BW.placeBuilding(G, kind, town, spot.x, spot.z, spot.rot); }
       }
     }
@@ -221,6 +225,7 @@
     god.pop = pop0; god.impress = impress0 + god.miracleImpress;
     god.miracleImpress = Math.max(0, god.miracleImpress - dt * 0.5);
     let infl = 45 + pop0 * 1.6 + god.impress * 0.35;
+    { const pt = G.playerTown(); const c = pt && G.center(pt); if (c && c.level > 1) infl *= 1 + 0.15 * (c.level - 1); }
     if (G.hasUnlock('g_influence')) infl *= 1.3;
     god.influence += (Math.min(infl, 230) - god.influence) * Math.min(1, dt * 0.5);
     god.maxPrayer = 800 + pop0 * 40 + (G.hasUnlock('g_prayer') ? 600 : 0);

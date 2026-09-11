@@ -88,7 +88,7 @@
     }
     addBuilding(kind, town, x, z, rot = 0, built = false) {
       const def = BW.BUILDINGS[kind];
-      const b = { type: 'building', id: uid(), kind, owner: town.owner, town: town.id, x, z, y: this.groundY(x, z), rot, hp: built ? def.hp : def.hp * 0.2, maxHp: def.hp, progress: built ? 1 : 0, built, fire: 0, crop: kind === 'field' ? 0.3 : 0, timer: 0, garrison: 0 };
+      const b = { type: 'building', id: uid(), kind, owner: town.owner, town: town.id, x, z, y: this.groundY(x, z), rot, hp: built ? def.hp : def.hp * 0.2, maxHp: def.hp, progress: built ? 1 : 0, built, fire: 0, crop: kind === 'field' ? 0.3 : 0, timer: 0, garrison: 0, level: 1, upgrading: false };
       this._register(b, this.buildings);
       this.navDirty = true;
       this._buildBuildingMesh(b);
@@ -159,8 +159,9 @@
     }
     townBuildings(town, kind) { return this.buildings.filter((b) => b.town === town.id && (!kind || b.kind === kind)); }
     townPeople(town) { return this.people.filter((p) => p.town === town.id); }
-    townCapacity(town) { let c = 0; for (const b of this.buildings) if (b.town === town.id && b.built) c += BW.BUILDINGS[b.kind].capacity || 0; return c; }
-    townImpress(town) { let s = 0; for (const b of this.buildings) if (b.town === town.id && b.built) s += BW.BUILDINGS[b.kind].impress; return s; }
+    townCapacity(town) { let c = 0; for (const b of this.buildings) if (b.town === town.id && b.built) c += Math.round((BW.BUILDINGS[b.kind].capacity || 0) * BW.UPGRADE.capacity[(b.level || 1) - 1]); return c; }
+    townImpress(town) { let s = 0; for (const b of this.buildings) if (b.town === town.id && b.built) s += BW.BUILDINGS[b.kind].impress * BW.UPGRADE.impress[(b.level || 1) - 1]; return s; }
+    levelMul(b, what) { return BW.UPGRADE[what][(b.level || 1) - 1]; }
     // Player influence: centred on every player town center.
     influenceCenters() { return this.playerTowns().map((t) => this.center(t)).filter(Boolean); }
     inInfluence(x, z) {
@@ -176,7 +177,7 @@
     hasUnlock(k) { return !k || !!this.god.unlocks[k]; }
 
     // ------------------------------------------------------------ resources
-    storageCap(town) { let c = 0; for (const b of this.buildings) if (b.town === town.id && b.built) c += BW.BUILDINGS[b.kind].storage || 0; return c + 40 * this.townBuildings(town, 'house').filter((b) => b.built).length; }
+    storageCap(town) { let c = 0; for (const b of this.buildings) if (b.town === town.id && b.built) c += (BW.BUILDINGS[b.kind].storage || 0) * BW.UPGRADE.storage[(b.level || 1) - 1]; return Math.round(c + 40 * this.townBuildings(town, 'house').filter((b) => b.built).length); }
     deposit(town, kind, amount) { const cap = town.cap_ || this.storageCap(town); town[kind] = Math.min(cap, (town[kind] || 0) + amount); if (town[kind] >= cap && town.owner === 0 && (!this.lastFullMsg || this.time - this.lastFullMsg > 90)) { this.lastFullMsg = this.time; this.say(`${kind.charAt(0).toUpperCase() + kind.slice(1)} storage is full. Build a Storehouse.`, 'warn'); } }
     canAfford(town, cost) { for (const k in cost) if ((town[k] || 0) < cost[k]) return false; return true; }
     pay(town, cost) { for (const k in cost) town[k] -= cost[k]; }
@@ -197,7 +198,9 @@
     syncBuilding(b) {
       const m = b._mesh; if (!m) return;
       const sc = m.getObjectByName('scaffold');
-      if (sc) sc.visible = !b.built;
+      if (sc) sc.visible = !b.built || !!b.upgrading;
+      const lv = BW.UPGRADE.scale[(b.level || 1) - 1];
+      m.scale.set(lv, 1, lv);
       const s = b.built ? 1 : 0.15 + 0.85 * b.progress;
       m.children.forEach((ch) => { if (ch.name !== 'scaffold') ch.scale.y = s; ch.position.y = ch.userData.baseY !== undefined ? ch.userData.baseY * s : (ch.userData.baseY = ch.position.y) * s; });
       if (b.kind === 'field') {
@@ -321,6 +324,7 @@
       if (data.rng !== undefined) this.rng.s = data.rng;
       if (data.weather) this.weather = data.weather; if (data.season) this.season = data.season; if (data.director) this.director = data.director;
       this.history = data.history || [];
+        for (const b of this.buildings) { if (!b.level) b.level = 1; if (b.upgrading === undefined) b.upgrading = false; }
       // Older saves: ore became stone.
       for (const t of this.towns) { if (t.ore !== undefined) { t.stone = (t.stone || 0) + t.ore; delete t.ore; } for (const k of BW.RESOURCES) if (t[k] === undefined) t[k] = 0; }
       for (const r of this.rocks) if (!r.kind) r.kind = 'stone';
