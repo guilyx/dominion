@@ -132,17 +132,50 @@
       const fgeo = new THREE.PlaneGeometry(this.size * 6, this.size * 6, 1, 1); fgeo.rotateX(-Math.PI / 2);
       this.farWater = new THREE.Mesh(fgeo, new THREE.MeshLambertMaterial({ color: 0x1d5a8a })); this.farWater.position.y = -0.6; this.group.add(this.farWater);
       this.setPalette(0, 'summer');
-      this.buildBudget = 6;
+      this.buildBudget = 10;
+    }
+
+    // Biomes come from two slow noise fields (moisture, temperature) plus altitude.
+    biomeWeights(x, z, h) {
+      const n = this.noise, nx = x / this.size, nz = z / this.size;
+      if (h === undefined) h = this.heightAt(x, z);
+      const m = n.fbm(nx * 1.7 + 31, nz * 1.7 + 17, 3);
+      const t = n.fbm(nx * 1.3 + 71, nz * 1.3 + 53, 3) - Math.max(0, h - 16) / 40;
+      const w = {};
+      w.tundra = smoothstep(-0.16, -0.36, t);
+      w.desert = smoothstep(-0.26, -0.44, m) * smoothstep(-0.02, 0.14, t);
+      w.swamp = smoothstep(0.1, 0.26, m) * smoothstep(12, 6, h);
+      w.jungle = smoothstep(0.06, 0.24, t) * smoothstep(-0.1, 0.06, m) * (1 - w.swamp);
+      w.badlands = smoothstep(-0.08, -0.28, m) * smoothstep(0.06, -0.14, t) * (1 - w.tundra) * (1 - w.desert);
+      let sum = 0; for (const k in w) sum += w[k];
+      if (sum > 1) { for (const k in w) w[k] /= sum; sum = 1; }
+      w.grassland = 1 - sum;
+      return w;
+    }
+    biomeAt(x, z) {
+      const h = this.heightAt(x, z);
+      if (h > (this.palette ? this.palette.snowLine : 34)) return 'alpine';
+      const w = this.biomeWeights(x, z, h); let best = 'grassland', bv = w.grassland;
+      for (const k in w) if (w[k] > bv) { bv = w[k]; best = k; }
+      return best;
     }
 
     setPalette(alignment, season = 'summer') {
       const good = clamp(alignment, 0, 1), evil = clamp(-alignment, 0, 1);
       const P = this.palette = {};
-      P.grassA = new THREE.Color(0x4f8a3a).lerp(new THREE.Color(0x6fc55a), good * 0.6).lerp(new THREE.Color(0x6a5a3a), evil * 0.75);
-      P.grassB = new THREE.Color(0x3d7031).lerp(new THREE.Color(0x4fa84a), good * 0.6).lerp(new THREE.Color(0x4a3a2c), evil * 0.75);
-      if (season === 'autumn') { P.grassA.lerp(new THREE.Color(0xb08a3a), 0.35); P.grassB.lerp(new THREE.Color(0x8a6a2a), 0.35); }
-      if (season === 'winter') { P.grassA.lerp(new THREE.Color(0xe8eef2), 0.75); P.grassB.lerp(new THREE.Color(0xd0dae2), 0.75); }
-      if (season === 'spring') { P.grassA.lerp(new THREE.Color(0x7fd46a), 0.25); P.grassB.lerp(new THREE.Color(0x5fb85a), 0.25); }
+      const tint = (hexA, hexB, evilMix = 0.75) => {
+        const A = new THREE.Color(hexA).lerp(new THREE.Color(0x6fc55a), good * 0.3).lerp(new THREE.Color(0x6a5a3a), evil * evilMix);
+        const B = new THREE.Color(hexB).lerp(new THREE.Color(0x4fa84a), good * 0.3).lerp(new THREE.Color(0x4a3a2c), evil * evilMix);
+        if (season === 'autumn') { A.lerp(new THREE.Color(0xb08a3a), 0.3); B.lerp(new THREE.Color(0x8a6a2a), 0.3); }
+        if (season === 'winter') { A.lerp(new THREE.Color(0xe8eef2), 0.75); B.lerp(new THREE.Color(0xd0dae2), 0.75); }
+        if (season === 'spring') { A.lerp(new THREE.Color(0x7fd46a), 0.2); B.lerp(new THREE.Color(0x5fb85a), 0.2); }
+        return [A, B];
+      };
+      P.biomes = {
+        grassland: tint(0x4f8a3a, 0x3d7031), tundra: tint(0x9aa58a, 0x7f8c70, 0.4), desert: tint(0xd9c47a, 0xc9ae5e, 0.3),
+        swamp: tint(0x4a5a2a, 0x3a4a22), jungle: tint(0x2f8a2a, 0x4fb040), badlands: tint(0x7a5040, 0x5a3a30, 0.3),
+      };
+      P.grassA = P.biomes.grassland[0]; P.grassB = P.biomes.grassland[1];
       P.sand = new THREE.Color(0xd8c98a).lerp(new THREE.Color(0x8a7a60), evil * 0.5);
       P.rock = new THREE.Color(0x7a746a).lerp(new THREE.Color(0x5a3c3c), evil * 0.6);
       P.snow = new THREE.Color(0xf4f4f8);
@@ -158,7 +191,10 @@
       const P = this.palette, n = this.noise;
       const slope = this.slopeAt(x, z);
       const v = n.fbm(x * 0.08, z * 0.08, 2) * 0.5 + 0.5;
-      c.copy(P.grassA).lerp(P.grassB, v);
+      const w = this.biomeWeights(x, z, h);
+      c.setRGB(0, 0, 0);
+      const tmp = this._tmpc || (this._tmpc = new THREE.Color());
+      for (const k in w) { if (w[k] <= 0.001) continue; const [A, B] = P.biomes[k]; tmp.copy(A).lerp(B, v); c.r += tmp.r * w[k]; c.g += tmp.g * w[k]; c.b += tmp.b * w[k]; }
       if (h < 2.5) c.lerp(P.sand, 1 - smoothstep(0.2, 2.5, h));
       if (slope > 0.7) c.lerp(P.rock, smoothstep(0.7, 1.3, slope));
       if (h > P.snowLine) c.lerp(P.snow, smoothstep(P.snowLine, P.snowLine + 10, h));
@@ -219,9 +255,9 @@
 
     // Called every frame: ensure chunks near the camera exist at the right LOD.
     updateChunks(camX, camZ, camY) {
-      let built = 0;
       const CSw = this.CS * this.cell;
       const far = 750 + camY * 0.5;
+      const todo = [];
       for (let cj = 0; cj < this.nChunks; cj++) for (let ci = 0; ci < this.nChunks; ci++) {
         const cx = (ci + 0.5) * CSw - this.half, cz = (cj + 0.5) * CSw - this.half;
         const d = Math.hypot(cx - camX, cz - camZ, camY * 0.6);
@@ -230,12 +266,17 @@
         if (d > far) { if (cur) { this.group.remove(cur.mesh); cur.mesh.geometry.dispose(); this.chunks.delete(key); } continue; }
         const lod = d < 120 ? 0 : d < 300 ? 1 : 2;
         if (cur && cur.lod === lod && cur.version === this.colorVersion) continue;
-        if (built >= this.buildBudget) continue;
-        if (cur) { this.group.remove(cur.mesh); cur.mesh.geometry.dispose(); }
-        const mesh = this._buildChunk(ci, cj, lod);
+        todo.push({ ci, cj, key, lod, d, cur });
+      }
+      // Nearest chunks first, so a camera jump fills in under the player before the horizon.
+      todo.sort((a, b) => a.d - b.d);
+      const budget = this.chunks.size < 12 ? 40 : this.buildBudget;
+      for (let i = 0; i < todo.length && i < budget; i++) {
+        const c = todo[i];
+        if (c.cur) { this.group.remove(c.cur.mesh); c.cur.mesh.geometry.dispose(); }
+        const mesh = this._buildChunk(c.ci, c.cj, c.lod);
         this.group.add(mesh);
-        this.chunks.set(key, { mesh, lod, version: this.colorVersion });
-        built++;
+        this.chunks.set(c.key, { mesh, lod: c.lod, version: this.colorVersion });
       }
     }
 

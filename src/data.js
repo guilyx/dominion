@@ -90,50 +90,61 @@
 
   BW.TEAM_COLORS = [0xf0c040, 0x3f6fd8, 0xc83c3c, 0x9c4fd0, 0x2fa86a];
 
-  // Campaign. Each land is procedurally generated from its seed.
+  BW.BIOME_NAMES = { grassland: 'Grassland', tundra: 'Tundra', desert: 'Desert', swamp: 'Marsh', jungle: 'Jungle', badlands: 'Badlands', alpine: 'Alpine' };
+  BW.BIOME_GROWTH = { grassland: 1, tundra: 0.6, desert: 0.55, swamp: 0.9, jungle: 1.25, badlands: 0.7, alpine: 0.4 };
+  BW.TRIBE_NAMES = ['Norse', 'Aztec', 'Greek', 'Japanese', 'Egyptian', 'Celtic', 'Persian'];
+
+  // Campaign. Each land is procedurally generated from its seed; towns are
+  // spread around a ring so every land has room for several tribes.
   BW.LANDS = [
     {
-      name: 'The Land of Beginnings', seed: 1107, size: 300,
-      intro: 'A quiet island. A small tribe to the east does not yet believe in you. Grow your town, raise your creature, and win them over: by awe, or by force.',
-      player: { x: -70, z: 45, pop: 12 },
+      name: 'The Land of Beginnings', seed: 1107, size: 380,
+      intro: 'A quiet island shared with two small tribes. Neither believes in you yet. Grow your town, raise your creature, and win them over: by awe, or by force.',
+      player: { pop: 12 },
       enemies: [
-        { name: 'Aztec', x: 70, z: -45, pop: 14, aggression: 0.15, color: 2 },
+        { name: 'Aztec', pop: 14, aggression: 0.15, color: 2 },
+        { name: 'Celtic', pop: 12, aggression: 0.1, color: 4 },
       ],
-      objectives: ['Reach 30 villagers', 'Convert or conquer the Aztec town'],
+      objectives: ['Reach 30 villagers', 'Convert or conquer both towns'],
       treeDensity: 1.0,
     },
     {
-      name: 'Twin Shores', seed: 2389, size: 330,
-      intro: 'Two tribes share this land. The Norse raid whoever looks weak. Build towers, or make your creature strong.',
-      player: { x: -90, z: 10, pop: 16 },
+      name: 'Twin Shores', seed: 2389, size: 460,
+      intro: 'Three tribes share this larger land. The Norse raid whoever looks weak. Build towers, or make your creature strong.',
+      player: { pop: 16 },
       enemies: [
-        { name: 'Norse', x: 95, z: 60, pop: 18, aggression: 0.55, color: 1 },
-        { name: 'Greek', x: 60, z: -95, pop: 16, aggression: 0.25, color: 3 },
+        { name: 'Norse', pop: 18, aggression: 0.55, color: 1 },
+        { name: 'Greek', pop: 16, aggression: 0.25, color: 3 },
+        { name: 'Egyptian', pop: 14, aggression: 0.2, color: 4 },
       ],
-      objectives: ['Convert or conquer both towns'],
+      objectives: ['Convert or conquer all three towns'],
       treeDensity: 1.1,
     },
     {
-      name: 'The Titan', seed: 3571, size: 350,
-      intro: 'The Japanese god here has a creature of its own, a great wolf. It will not tolerate you near its towns.',
-      player: { x: -95, z: -20, pop: 18 },
+      name: 'The Titan', seed: 3571, size: 560,
+      intro: 'Four tribes, and two of their gods keep creatures of their own. The Japanese wolf will not tolerate you near its towns.',
+      player: { pop: 18 },
       enemies: [
-        { name: 'Japanese', x: 90, z: 70, pop: 22, aggression: 0.5, color: 3, creature: { species: 'wolf', size: 2.4 } },
-        { name: 'Egyptian', x: 70, z: -100, pop: 18, aggression: 0.35, color: 4 },
+        { name: 'Japanese', pop: 22, aggression: 0.5, color: 3, creature: { species: 'wolf', size: 2.4 } },
+        { name: 'Egyptian', pop: 18, aggression: 0.35, color: 4 },
+        { name: 'Persian', pop: 18, aggression: 0.4, color: 2, creature: { species: 'tortoise', size: 2.2 } },
+        { name: 'Celtic', pop: 16, aggression: 0.3, color: 1 },
       ],
-      objectives: ['Convert or conquer both towns', 'Survive the wolf'],
+      objectives: ['Convert or conquer all four towns', 'Survive the creatures'],
       treeDensity: 1.2,
     },
     {
-      name: 'Reckoning', seed: 4813, size: 390,
-      intro: 'Three gods rule this land, and one of them commands both a lion and fire from the sky. This is the final test.',
-      player: { x: -120, z: 0, pop: 20 },
+      name: 'Reckoning', seed: 4813, size: 660,
+      intro: 'Five gods rule this vast land, and two of them command both a creature and fire from the sky. This is the final test.',
+      player: { pop: 20 },
       enemies: [
-        { name: 'Norse', x: 100, z: 95, pop: 26, aggression: 0.75, color: 1, creature: { species: 'lion', size: 2.8 }, godMiracles: true },
-        { name: 'Aztec', x: 130, z: -70, pop: 22, aggression: 0.55, color: 2, godMiracles: true },
-        { name: 'Greek', x: -20, z: -130, pop: 20, aggression: 0.4, color: 4 },
+        { name: 'Norse', pop: 26, aggression: 0.75, color: 1, creature: { species: 'lion', size: 2.8 }, godMiracles: true },
+        { name: 'Aztec', pop: 22, aggression: 0.55, color: 2, godMiracles: true },
+        { name: 'Greek', pop: 20, aggression: 0.4, color: 4 },
+        { name: 'Japanese', pop: 22, aggression: 0.6, color: 3, creature: { species: 'ape', size: 2.4 } },
+        { name: 'Persian', pop: 18, aggression: 0.35, color: 1 },
       ],
-      objectives: ['Convert or conquer all three towns'],
+      objectives: ['Convert or conquer all five towns'],
       treeDensity: 1.2,
     },
   ];

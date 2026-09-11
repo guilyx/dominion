@@ -232,7 +232,7 @@
     p.state = 'walk';
     if (moveToward(G, p, f.x + Math.sin(p.id) * 2, f.z + Math.cos(p.id) * 2, dt, p.speed, 1.2)) {
       p.state = 'work'; p.dir += dt * 0.5;
-      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
+      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (BW.BIOME_GROWTH[f.biome] || 1) * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
       f._dirty = true;
       if (f.crop >= 1) { f.crop = 0.05; p.carry = { kind: 'food', amount: 28 }; G.particles.burst(f.x, f.y + 1, f.z, 8, 2, 0.6, 0xe0c040, 1.2, 2); }
     }

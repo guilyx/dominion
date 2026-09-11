@@ -346,8 +346,10 @@
 
     renderMenu() {
       const p = this.subpanel, g = this.game;
+      const A = BW.audio;
       p.innerHTML = `<h3>Menu</h3><div class="actions" style="display:flex;gap:6px;flex-wrap:wrap">
-        <button id="m-save">Save (F5)</button><button id="m-load" ${g.hasSave() ? '' : 'disabled'}>Load (F9)</button>
+        <button id="m-save">Quick save (F5)</button><button id="m-load" ${g.hasSave() ? '' : 'disabled'}>Quick load (F9)</button>
+        <button id="m-slots-save">Save to slot…</button><button id="m-slots-load">Load from slot…</button>
         <button id="m-pause">${g.paused ? 'Resume' : 'Pause'} (P)</button>
         <button id="m-speed">Speed: ${g.speed}x</button>
         <button id="m-shadows">Shadows: ${g.shadows ? 'on' : 'off'}</button>
@@ -355,9 +357,14 @@
         <button id="m-help">Controls</button>
         <button id="m-restart" class="danger">Restart land</button>
         <button id="m-main" class="danger">Main menu</button></div>
-        <div class="desc">Progress is saved in your browser (localStorage).</div>`;
+        <div class="sliders">${['master', 'music', 'sfx', 'ambience'].map((k) => `<label>${k.charAt(0).toUpperCase() + k.slice(1)} <input type="range" min="0" max="100" value="${Math.round(A.vol[k] * 100)}" data-vol="${k}" id="vol-${k}"></label>`).join('')}</div>
+        <div id="slotlist"></div>
+        <div class="desc">Progress is saved in your browser (localStorage). Autosave writes every two minutes to its own slot.</div>`;
+      p.querySelectorAll('[data-vol]').forEach((el) => el.addEventListener('input', () => { BW.audio.init(); BW.audio.setVolume(el.dataset.vol, el.value / 100); }));
+      $('m-slots-save').onclick = () => this.renderSlots('save');
+      $('m-slots-load').onclick = () => this.renderSlots('load');
       $('m-save').onclick = () => g.save();
-      $('m-load').onclick = () => g.load();
+      $('m-load').onclick = () => g.load('quick');
       $('m-pause').onclick = () => { g.togglePause(); this.renderTab(); };
       $('m-speed').onclick = () => { g.speed = g.speed === 1 ? 2 : g.speed === 2 ? 3 : 1; this.renderTab(); };
       $('m-shadows').onclick = () => { g.shadows = !g.shadows; g.gfx.setShadows(g.shadows); this.renderTab(); };
@@ -369,6 +376,16 @@
       arm($('m-main'), 'Click again to quit (unsaved progress is lost)', () => g.showMainMenu());
     }
 
+    // Slot picker for saving or loading. Autosave and quick save are listed too.
+    renderSlots(mode, container) {
+      const g = this.game; const box = container || $('slotlist'); if (!box) return;
+      const rows = g.listSaves().filter((s) => mode === 'save' ? !['quick', 'auto'].includes(s.slot) : true);
+      const label = (s) => s.slot === 'quick' ? 'Quick save' : s.slot === 'auto' ? 'Autosave' : 'Slot ' + s.slot;
+      const when = (m) => m && m.savedAt ? new Date(m.savedAt).toLocaleString() : '';
+      box.innerHTML = `<div class="slots"><small>${mode === 'save' ? 'Save to which slot?' : 'Load which save?'}</small>` + rows.map((s) => `<button class="slot ${s.meta ? '' : 'empty'}" data-slot="${s.slot}" ${mode === 'load' && !s.meta ? 'disabled' : ''}><b>${label(s)}</b><span>${s.meta ? `${esc(s.meta.name || '')} · day ${s.meta.day || '?'} · ${s.meta.pop || 0} villagers${s.meta.species ? ' · ' + s.meta.species : ''}<br><small>${when(s.meta)}</small>` : 'Empty'}</span></button>`).join('') + '</div>';
+      box.querySelectorAll('[data-slot]').forEach((b) => b.onclick = () => { if (mode === 'save') { g.save(false, b.dataset.slot); this.renderSlots('save', container); } else g.load(b.dataset.slot); });
+    }
+
     showBuilding(b) {
       const G = this.G, el = $('buildinginfo'); const d = BW.BUILDINGS[b.kind]; const town = G.ents.get(b.town);
       const workers = G.people.filter((p) => p.workId === b.id && !p.inside).length;
@@ -376,7 +393,7 @@
       el.innerHTML = `<h3>${d.name} <small>— ${town ? esc(town.name) : ''}</small></h3>
         <div>HP ${Math.ceil(b.hp)} / ${b.maxHp}${b.fire > 0 ? ' · <span style="color:#ff8a70">ON FIRE</span>' : ''}</div>
         ${b.built ? '' : `<div>Construction ${Math.round(b.progress * 100)}% · ${workers} builders</div>`}
-        ${b.kind === 'field' ? `<div>Crop ${Math.round(b.crop * 100)}% · ${workers} farmers${b.rain > 0 ? ' · watered' : ''}</div>` : ''}
+        ${b.kind === 'field' ? `<div>Crop ${Math.round(b.crop * 100)}% · ${workers} farmers${b.rain > 0 ? ' · watered' : ''}${b.biome ? ' · ' + BW.BIOME_NAMES[b.biome] + ' soil ×' + (BW.BIOME_GROWTH[b.biome] || 1) : ''}</div>` : ''}
         ${b.kind === 'house' ? `<div>${b.garrison} sleeping inside</div>` : ''}
         ${b.kind === 'altar' ? `<div>${workers} worshippers</div>` : ''}
         <div class="muted" style="margin-top:4px">${esc(d.desc)}</div>
@@ -472,14 +489,16 @@
         this.overlay(`<h1>DOMINION</h1><h2>A god game for the browser</h2>
           <p>Rule a tribe from above. Nurture or terrorise your villagers, raise a colossal creature, and win the island by awe or by war.</p>
           <div><small>Choose your creature</small><div class="species">${Object.entries(BW.SPECIES).map(([k, s]) => { const img = this.icon('c_' + k, () => BW.creatureMesh(k, 0)); return `<div class="item ${k === species ? 'active' : ''}" data-sp="${k}">${img ? `<img src="${img}" alt="">` : ''}<b>${s.name}</b><small>${esc(s.desc)}</small></div>`; }).join('')}</div></div>
-          <div class="menu"><button id="mm-new">New campaign</button><button id="mm-continue" ${hasSave ? '' : 'disabled'}>Continue</button><button id="mm-skirmish">Skirmish</button><button id="mm-help">Controls</button></div>
-          <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+          <div class="menu"><button id="mm-new">New campaign</button><button id="mm-continue" ${hasSave ? '' : 'disabled'}>Continue</button><button id="mm-load" ${hasSave ? '' : 'disabled'}>Load game…</button><button id="mm-skirmish">Skirmish</button><button id="mm-help">Controls</button></div>
+          <div id="mm-slots"></div>
+          <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option><option value="1000" ${opts.size === '1000' ? 'selected' : ''}>Huge</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
           <p class="muted" style="font-size:12px">Tip: this runs entirely in your browser. Saves live in localStorage.</p>`);
         $('overlaybox').querySelectorAll('[data-sp]').forEach((el) => el.onclick = () => { species = el.dataset.sp; render(); });
         $('mm-new').onclick = () => { BW.audio.init(); g.newCampaign(species, 0); };
         $('mm-skirmish').onclick = () => { BW.audio.init(); g.newCampaign(species, 0, true, { seed: parseInt($('sk-seed').value, 10) || 12345, size: parseInt($('sk-size').value, 10), tribes: parseInt($('sk-tribes').value, 10) }); };
         ['sk-seed', 'sk-size', 'sk-tribes'].forEach((id) => $(id).addEventListener('change', () => { opts.seed = $('sk-seed').value; opts.size = $('sk-size').value; opts.tribes = $('sk-tribes').value; }));
         $('mm-continue').onclick = () => { BW.audio.init(); g.load(); };
+        $('mm-load').onclick = () => { BW.audio.init(); this.renderSlots('load', $('mm-slots')); };
         $('mm-help').onclick = () => this.toggleHelp();
       };
       render();

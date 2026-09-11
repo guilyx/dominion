@@ -20,11 +20,23 @@
       this.fpsT = 0; this.frames = 0;
       this.running = false;
       BW.input.onKey = (e) => this.onKey(e);
+      document.addEventListener('pointerdown', () => { BW.audio.init(); BW.audio.resume(); }, { capture: true });
       this.showMainMenu();
       requestAnimationFrame((t) => this.frame(t));
     }
 
-    hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+    // Save slots: quick (F5/F9), auto (every two minutes) and five named slots.
+    slotKey(slot) { return slot === 'quick' ? SAVE_KEY : SAVE_KEY + '_' + slot; }
+    listSaves() {
+      const out = [];
+      for (const slot of ['quick', 'auto', '1', '2', '3', '4', '5']) {
+        let meta = null; try { meta = JSON.parse(localStorage.getItem(this.slotKey(slot) + '_meta')); if (!meta && localStorage.getItem(this.slotKey(slot))) meta = { name: 'Older save' }; } catch (e) { meta = null; }
+        out.push({ slot, meta });
+      }
+      return out;
+    }
+    hasSave() { return this.listSaves().some((s) => s.meta); }
+    latestSlot() { let best = null; for (const s of this.listSaves()) if (s.meta && (!best || (s.meta.savedAt || 0) > (best.meta.savedAt || 0))) best = s; return best ? best.slot : null; }
 
     newCampaign(species, landIndex = 0, skirmish = false, opts = null) {
       this.demo = false;
@@ -33,20 +45,28 @@
     }
 
     // A skirmish land generated from a seed: tribes spread around the island.
+    // Spread towns around a ring so each has its own stretch of coast and hinterland.
+    ringPositions(land, count, seed) {
+      const rng = new BW.RNG(seed * 13 + 7); const R = land.size * 0.29; const base = rng.next() * 6.28;
+      return Array.from({ length: count }, (_, k) => { const a = base + k / count * 6.28 + (rng.next() - 0.5) * 0.25; const r = R * (0.9 + rng.next() * 0.2); return { x: Math.round(Math.cos(a) * r), z: Math.round(Math.sin(a) * r) }; });
+    }
     landFor(index) {
       const P = this.profile;
-      if (!P.custom) return BW.LANDS[index];
+      if (!P.custom) {
+        const land = BW.LANDS[index];
+        if (land.player.x === undefined) { const pos = this.ringPositions(land, land.enemies.length + 1, land.seed); Object.assign(land.player, pos[0]); land.enemies.forEach((e, i) => Object.assign(e, pos[i + 1])); }
+        return land;
+      }
       if (P.customLand) return P.customLand;
       const o = P.custom; const rng = new BW.RNG(o.seed);
-      const R = o.size * 0.29; const n = o.tribes;
-      const base = rng.next() * 6.28;
-      const at = (k) => { const a = base + k / (n + 1) * 6.28; return { x: Math.round(Math.cos(a) * R), z: Math.round(Math.sin(a) * R) }; };
-      const names = ['Norse', 'Aztec', 'Greek', 'Japanese', 'Egyptian'];
+      const n = o.tribes;
+      const pos = this.ringPositions({ size: o.size }, n + 1, o.seed);
+      const names = BW.TRIBE_NAMES.slice(); for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
       const species = ['wolf', 'lion', 'ape', 'cow', 'tortoise'];
       const enemies = [];
-      for (let k = 1; k <= n; k++) { const p = at(k); enemies.push({ name: names[(k - 1) % 5], x: p.x, z: p.z, pop: 14 + Math.floor(rng.next() * 12), aggression: 0.2 + rng.next() * 0.6, color: 1 + ((k - 1) % 4), creature: rng.next() < 0.4 ? { species: species[Math.floor(rng.next() * 5)], size: 1.8 + rng.next() * 1.2 } : null, godMiracles: rng.next() < 0.4 }); }
-      const pp = at(0);
-      P.customLand = { name: `Isle ${o.seed}`, seed: o.seed, size: o.size, custom: true, intro: `A ${o.size >= 800 ? 'vast' : o.size >= 500 ? 'large' : 'small'} island with ${n} rival tribe${n > 1 ? 's' : ''}. Win it by awe or by war.`, player: { x: pp.x, z: pp.z, pop: 18 }, enemies, objectives: ['Convert or conquer every town'], treeDensity: 1.1 };
+      for (let k = 1; k <= n; k++) { const p = pos[k]; enemies.push({ name: names[(k - 1) % names.length], x: p.x, z: p.z, pop: 14 + Math.floor(rng.next() * 12), aggression: 0.2 + rng.next() * 0.6, color: 1 + ((k - 1) % 4), creature: rng.next() < 0.4 ? { species: species[Math.floor(rng.next() * 5)], size: 1.8 + rng.next() * 1.2 } : null, godMiracles: rng.next() < 0.4 }); }
+      const pp = pos[0];
+      P.customLand = { name: `Isle ${o.seed}`, seed: o.seed, size: o.size, custom: true, intro: `A ${o.size >= 1000 ? 'huge' : o.size >= 800 ? 'vast' : o.size >= 500 ? 'large' : 'small'} island with ${n} rival tribe${n > 1 ? 's' : ''}. Win it by awe or by war.`, player: { x: pp.x, z: pp.z, pop: 18 }, enemies, objectives: ['Convert or conquer every town'], treeDensity: 1.1 };
       return P.customLand;
     }
 
@@ -150,17 +170,22 @@
     scatter(G, land, rng) {
       const T = G.terrain, half = T.half;
       const n = Math.floor(land.size * land.size / 22 * land.treeDensity);
+      const DENS = { grassland: 1.0, tundra: 0.35, desert: 0.12, swamp: 1.3, jungle: 1.6, badlands: 0.25 };
       for (let i = 0; i < n; i++) {
         const x = rng.range(-half + 4, half - 4), z = rng.range(-half + 4, half - 4);
         const h = T.heightAt(x, z);
         if (h < 1.5 || h > 30) continue;
         if (T.slopeAt(x, z) > 0.8) continue;
         const v = T.noise.fbm(x * 0.03 + 50, z * 0.03 + 50, 3) * 0.5 + 0.5;
-        if (rng.next() > v * 1.6 + 0.1) continue;
+        const w = T.biomeWeights(x, z, h); let dens = 0; for (const k in w) dens += w[k] * DENS[k];
+        if (rng.next() > (v * 1.6 + 0.1) * dens) continue;
         let tooClose = false;
         for (const t of G.towns) if (dist(t.x, t.z, x, z) < 14) { tooClose = true; break; }
         if (tooClose || G.buildingAt(x, z, 1.5)) continue;
-        G.addTree(x, z, 0.7 + rng.next() * 0.8);
+        const tree = G.addTree(x, z, 0.7 + rng.next() * 0.8);
+        // Conifers on cold and high ground, broadleaf in the wet and warm.
+        const cold = w.tundra + w.badlands + (h > 18 ? 0.6 : 0), wet = w.swamp + w.jungle + w.desert;
+        tree.kind = cold > wet + 0.2 ? 0 : wet > cold + 0.2 ? 1 : tree.kind;
       }
       const nr = Math.floor(land.size / 9);
       for (let i = 0; i < nr; i++) {
@@ -168,7 +193,9 @@
         const h = T.heightAt(x, z);
         if (h < 2 || G.buildingAt(x, z, 2)) continue;
         if (T.slopeAt(x, z) < 0.25 && rng.next() < 0.6) continue; // rocks prefer hills
-        const k = rng.next(); G.addRock(x, z, 0.8 + rng.next() * 1.2, k < 0.65 ? 'stone' : k < 0.88 ? 'iron' : 'gold');
+        const k = rng.next(); const bw = T.biomeWeights(x, z);
+        const goldP = 0.12 + bw.desert * 0.3, ironP = 0.23 + bw.badlands * 0.35;
+        G.addRock(x, z, 0.8 + rng.next() * 1.2, k < goldP ? 'gold' : k < goldP + ironP ? 'iron' : 'stone');
       }
       // Guarantee a few rocks near the player.
       const pt = G.playerTown();
@@ -202,9 +229,24 @@
       // Influence ring follows the main temple
       const pt = G.playerTown();
       if (pt) { const c = G.center(pt); if (c) BW.updateRing(G.inflRing, c.x, c.z, G.god.influence, G.terrain, 0.5); G.inflRing.material.opacity = 0.35 + Math.sin(G.time * 2) * 0.1; }
+      this.updateAudioScene();
       this.gfx.render();
       if (!this.demo) this.ui.update(dt);
       BW.endInputFrame();
+    }
+
+    // Tell the sound engine what the camera is looking at.
+    updateAudioScene() {
+      const G = this.G, cam = this.camera; const T = G.terrain;
+      let water = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28; if (T.heightAt(cam.tx + Math.cos(a) * 28, cam.tz + Math.sin(a) * 28) < 0.5) water++; }
+      let tension = 0;
+      if (!this.demo) {
+        const pt = G.playerTown(); const c = pt && G.center(pt);
+        if (c) { const hostile = G.people.filter((p) => p.owner !== 0 && p.job === 'soldier' && BW.dist(p.x, p.z, c.x, c.z) < 90).length; tension = Math.min(1, hostile / 6); }
+        for (const cr of G.creatures) if (cr.state === 'fight' || cr.state === 'rampage') tension = Math.max(tension, cr.owner === 0 ? 0.5 : 0.8);
+        if (G.god.shields.length) tension = Math.max(tension, 0.3);
+      }
+      BW.audio.setScene({ night: 1 - (this.gfx.day === undefined ? 1 : this.gfx.day), rain: G.weather.kind === 'rain' ? 0.7 : G.weather.kind === 'storm' ? 1 : 0, sea: water / 8, tension, alignment: G.god.alignment, inGame: !this.demo });
     }
 
     simulate(dt) {
@@ -236,7 +278,7 @@
       if (this.demo) return;
       // Objectives / victory
       if (!G.won && G.time > 5 && G.enemyTowns().length === 0) this.onVictory();
-      if (G.time - (G.lastAutosave || 0) > 120) { G.lastAutosave = G.time; this.save(true); }
+      if (G.time - (G.lastAutosave || 0) > 120) { G.lastAutosave = G.time; this.save(true, 'auto'); }
     }
 
     objectiveDone(text) {
@@ -275,18 +317,22 @@
     }
 
     // ------------------------------------------------------------ save/load
-    save(silent = false) {
-      if (!this.G) return;
+    save(silent = false, slot = 'quick') {
+      if (!this.G || this.demo) return;
       try {
         this.storeProfile();
-        localStorage.setItem(SAVE_KEY, JSON.stringify({ profile: this.profile, world: JSON.parse(this.G.serialize()) }));
-        if (!silent) this.G.say('Game saved.', 'good');
+        const G = this.G; const land = this.landFor(G.landIndex);
+        const meta = { name: land.name, land: G.landIndex + 1, day: Math.floor(G.time / G.dayLength) + 1, pop: G.god.pop || 0, savedAt: Date.now(), custom: !!this.profile.custom, species: this.profile.species };
+        localStorage.setItem(this.slotKey(slot), JSON.stringify({ profile: this.profile, world: JSON.parse(G.serialize()) }));
+        localStorage.setItem(this.slotKey(slot) + '_meta', JSON.stringify(meta));
+        if (!silent) this.G.say(slot === 'quick' ? 'Game saved.' : `Saved to slot ${slot}.`, 'good');
       } catch (e) { if (!silent) this.G.say('Save failed: ' + e.message, 'bad'); }
     }
-    load() {
+    load(slot) {
+      if (!slot) slot = this.latestSlot() || 'quick';
       let data;
-      try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
-      if (!data) { if (this.G) this.G.say('No save found.', 'warn'); return; }
+      try { data = JSON.parse(localStorage.getItem(this.slotKey(slot))); } catch (e) { data = null; }
+      if (!data) { if (this.G) this.G.say('No save in that slot.', 'warn'); return; }
       this.profile = data.profile; this.demo = false;
       const land = this.landFor(data.world.landIndex);
       this.running = false;
@@ -324,7 +370,7 @@
       if (k === 'Space') { const t = G.playerTown(); if (t) this.camera.lookAt(t.x, t.z); return; }
       if (k === 'KeyF') { const c = G.playerCreature(); if (c) this.camera.lookAt(c.x, c.z); return; }
       if (k === 'F5') { e.preventDefault(); this.save(); return; }
-      if (k === 'F9') { e.preventDefault(); this.load(); return; }
+      if (k === 'F9') { e.preventDefault(); this.load('quick'); return; }
       if (/^Digit[1-9]$/.test(k)) { const kind = BW.MIRACLE_ORDER[+k.slice(5) - 1]; if (kind) this.ui.selectMiracle(kind); return; }
       if (k === 'Equal' || k === 'NumpadAdd') { this.speed = Math.min(3, this.speed + 1); }
       if (k === 'Minus' || k === 'NumpadSubtract') { this.speed = Math.max(1, this.speed - 1); }

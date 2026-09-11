@@ -19,10 +19,10 @@
       this.god = { prayer: 300, maxPrayer: 1000, alignment: 0, tribute: 0, unlocks: {}, miracleImpress: 0, influence: 45, shields: [], stats: { casts: 0, kills: 0, thrown: 0 }, renown: 0, renownRate: 0 };
       this.effects = [];             // timed world effects (rain zones, shields, fires)
       this.msgs = [];
-      this.peopleCrowd = BW.makePeopleCrowd(1500);
-      this.iconCrowd = BW.makeIconCrowd(600);
-      this.treeCrowd = BW.makeTreeCrowd(8000);
-      this.leafCrowd = BW.makeBroadleafCrowd(8000);
+      this.peopleCrowd = BW.makePeopleCrowd(2500);
+      this.iconCrowd = BW.makeIconCrowd(1000);
+      this.treeCrowd = BW.makeTreeCrowd(20000);
+      this.leafCrowd = BW.makeBroadleafCrowd(20000);
       this.rockCrowd = BW.makeRockCrowd(400);
       this.itemCrowd = BW.makeItemCrowd(400);
       this.particles = new BW.Particles(8000);

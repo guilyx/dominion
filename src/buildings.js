@@ -39,6 +39,7 @@
     if (kind !== 'mine') for (const r of G.rocks.slice()) if (Math.abs(r.x - x) < def.w / 2 + 0.5 && Math.abs(r.z - z) < def.d / 2 + 0.5) G.remove(r);
     const b = G.addBuilding(kind, town, x, z, rot, built);
     if (kind === 'mine') { const v = G.nearest(G.rocks, x, z, 9); b.vein = v ? v.kind : 'stone'; }
+    if (kind === 'field') b.biome = G.terrain.biomeAt(x, z);
     return b;
   }
 
@@ -128,7 +129,7 @@
       }
       if (b.kind === 'field' && b.built) {
         if (G.weather.kind === 'rain' || G.weather.kind === 'storm') b.rain = Math.max(b.rain || 0, 1);
-        let grow = b.rain > 0 ? 0.02 : 0.003;
+        let grow = (b.rain > 0 ? 0.02 : 0.003) * (BW.BIOME_GROWTH[b.biome] || 1);
         if (G.season === 'winter') grow *= 0.15; else if (G.weather.kind === 'drought') grow *= 0.4;
         if (b.crop < 1) { b.crop = Math.min(1, b.crop + grow * dt); if (BW.rand() < dt) b._dirty = true; }
       }

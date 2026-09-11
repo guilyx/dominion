@@ -128,9 +128,23 @@ the nearest wall.
 **Settlements.** With the Settlements unlock, build a New Temple far from your first and drop
 villagers on it to found a second town.
 
-**Campaign and skirmish.** Four hand-tuned lands of increasing difficulty; alignment, tribute,
-unlocks and your creature's training carry over. Skirmish takes a seed, a map size (up to a
-"vast" 800-unit island) and one to five rival tribes, so every seed is a new island you can share.
+**Biomes.** Moisture and temperature fields carve the island into grassland, jungle, marsh,
+desert, badlands, tundra and alpine snow. Each biome has its own ground colours, tree density
+and tree type; fields grow at different rates on different soil (jungle fastest, desert and
+tundra slowest); deserts hide more gold, badlands more iron.
+
+**Sound.** Everything is synthesized in the browser: layered ambience (wind, birds by day,
+crickets and owls at night, surf near the coast, rain in storms) and a generative score whose
+mode follows your alignment and which brings in drums only when danger is near. Master, music,
+effects and ambience sliders live in the Menu tab.
+
+**Saves.** Quick save (F5/F9), an autosave every two minutes, and five named slots with land, day,
+population and time stamps. "Continue" loads the most recent, "Load game…" lists them all.
+
+**Campaign and skirmish.** Four lands of increasing size and difficulty, with two to five rival
+tribes spread around each island; alignment, tribute, unlocks and your creature's training
+carry over. Skirmish takes a seed, a map size (small to a "huge" 1000-unit island) and one to
+seven rival tribes, so every seed is a new island you can share.
 
 ## Look and feel
 
