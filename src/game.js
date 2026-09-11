@@ -103,10 +103,10 @@
       this.camera.yaw = Math.atan2(ps.x, ps.z) + Math.PI; // look inland
       // Towns
       const rng = G.rng;
-      const pt = G.addTown({ name: 'Your town', owner: 0, color: 0, x: ps.x, z: ps.z, food: 260, wood: 220, ore: 40 });
+      const pt = G.addTown({ name: 'Your town', owner: 0, color: 0, x: ps.x, z: ps.z, food: 260, wood: 220, stone: 60, iron: 20, gold: 0 });
       this.setupTown(G, pt, land.player.pop, true, rng);
       land.enemies.forEach((e, i) => {
-        const t = G.addTown({ name: e.name, owner: i + 1, color: e.color, x: es[i].x, z: es[i].z, food: 300, wood: 260, ore: 80, ai: { aggression: e.aggression, godMiracles: !!e.godMiracles, timers: {} } });
+        const t = G.addTown({ name: e.name, owner: i + 1, color: e.color, x: es[i].x, z: es[i].z, food: 300, wood: 260, stone: 90, iron: 30, gold: 5, ai: { aggression: e.aggression, godMiracles: !!e.godMiracles, timers: {} } });
         this.setupTown(G, t, e.pop, false, rng);
         if (e.creature) { const c = G.addCreature(i + 1, e.creature.species, es[i].x + 14, es[i].z + 10, e.creature.size); c.name = BW.SPECIES[e.creature.species].name; }
       });
@@ -122,7 +122,7 @@
       G.god.influence = 45;
       G.season = 'spring';
       terrain.recolor(G.god.alignment, 'spring');
-      G.ensureNav();
+      G.ensureNav(); G.rebuildGrids();
       terrain.updateChunks(this.camera.cam.position.x, this.camera.cam.position.z, this.camera.cam.position.y);
       this.ui.initMinimap();
       BW.audio.setAlignment(G.god.alignment);
@@ -142,7 +142,8 @@
       for (let i = 0; i < houses; i++) put('house', 9, 24);
       for (let i = 0; i < Math.max(2, Math.ceil(pop / 6)); i++) put('field', 14, 32);
       put('altar', 10, 22);
-      if (!isPlayer) { for (let i = 0; i < 3; i++) { const a = rng.next() * 6.28, r = 24 + rng.next() * 10; const x = town.x + Math.sin(a) * r, z = town.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && !G.buildingAt(x, z, 2)) G.addRock(x, z, 1 + rng.next()); } }
+      // Every town gets a stone outcrop, an iron vein and a gold vein within reach.
+      for (const kind of ['stone', 'stone', 'iron', 'gold']) for (let i = 0; i < 30; i++) { const a = rng.next() * 6.28, r = 26 + rng.next() * 14; const x = town.x + Math.sin(a) * r, z = town.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && !G.buildingAt(x, z, 3) && !G.nearest(G.rocks, x, z, 8)) { G.addRock(x, z, 1.2 + rng.next() * 0.8, kind); break; } }
       for (let i = 0; i < pop; i++) { const a = rng.next() * 6.28, r = 6 + rng.next() * 10; G.addPerson(town, town.x + Math.sin(a) * r, town.z + Math.cos(a) * r, 'idle'); }
     }
 
@@ -167,7 +168,7 @@
         const h = T.heightAt(x, z);
         if (h < 2 || G.buildingAt(x, z, 2)) continue;
         if (T.slopeAt(x, z) < 0.25 && rng.next() < 0.6) continue; // rocks prefer hills
-        G.addRock(x, z, 0.8 + rng.next() * 1.2);
+        const k = rng.next(); G.addRock(x, z, 0.8 + rng.next() * 1.2, k < 0.65 ? 'stone' : k < 0.88 ? 'iron' : 'gold');
       }
       // Guarantee a few rocks near the player.
       const pt = G.playerTown();
@@ -296,7 +297,7 @@
         this.G.loadState(data.world);
         if (data.world.camera) this.camera.restore(data.world.camera);
         this.G.terrain.recolor(this.G.god.alignment, this.G.season);
-        this.G.ensureNav();
+        this.G.ensureNav(); this.G.rebuildGrids();
         this.ui.initMinimap();
         document.getElementById('landname').textContent = land.name;
         document.getElementById('loading').classList.remove('show');
@@ -311,7 +312,7 @@
     onKey(e) {
       const G = this.G; if (!G || !this.running || this.demo) return;
       const k = e.code;
-      const tabs = { KeyB: 'build', KeyM: 'miracles', KeyC: 'creature', KeyT: 'army', KeyU: 'tribute' };
+      const tabs = { KeyB: 'build', KeyM: 'miracles', KeyC: 'creature', KeyT: 'army', KeyU: 'tribute', KeyI: 'stats' };
       if (tabs[k]) return this.ui.toggleTab(tabs[k]);
       if (k === 'Escape') { if (this.hand.mode) this.hand.setMode(null); else if (this.ui.tab) this.ui.closeTab(); else this.ui.toggleTab('menu'); return; }
       if (k === 'KeyH') return this.ui.toggleHelp();

@@ -14,7 +14,7 @@
   <div id="topbar" class="panel">
     <div class="stat"><span>Prayer Power</span><b id="prayer">0</b><div id="prayerbar" class="bar"><i></i></div></div>
     <div class="stat"><span>Alignment</span><b id="aligntext">Neutral</b><div id="alignbar" class="bar"><i></i></div></div>
-    <div class="stat"><span>Tribute</span><b id="tribute">0</b></div>
+    <div class="stat" id="tributestat" title="Renown accrues from population, impressiveness and happiness. Every 300 renown is one Tribute point."><span>Tribute</span><b id="tribute">0</b><div id="renownbar" class="bar"><i></i></div><small id="renownrate"></small></div>
     <div class="stat"><span>Influence</span><b id="influence">0</b></div>
   </div>
   <div id="townpanel" class="panel">
@@ -22,7 +22,9 @@
     <div class="row"><span>Population</span><b id="pop">0 / 0</b></div>
     <div class="row"><span><i class="ico food"></i>Food</span><b id="food">0</b></div>
     <div class="row"><span><i class="ico wood"></i>Wood</span><b id="wood">0</b></div>
-    <div class="row"><span><i class="ico ore"></i>Ore</span><b id="ore">0</b></div>
+    <div class="row"><span><i class="ico stone"></i>Stone</span><b id="stone">0</b></div>
+    <div class="row"><span><i class="ico iron"></i>Iron</span><b id="iron">0</b></div>
+    <div class="row"><span><i class="ico gold"></i>Gold</span><b id="gold">0</b></div>
     <div class="row"><span>Impressiveness</span><b id="impress">0</b></div>
     <div class="row"><span>Happiness</span><b id="happy">-</b></div>
     <div class="jobs" id="jobs"></div>
@@ -46,6 +48,7 @@
       <button data-tab="creature">Creature<span class="key">C</span></button>
       <button data-tab="army">Army<span class="key">T</span></button>
       <button data-tab="tribute">Tribute<span class="key">U</span></button>
+      <button data-tab="stats">Stats<span class="key">I</span></button>
       <button data-tab="menu">Menu<span class="key">Esc</span></button>
     </div>
   </div>
@@ -53,6 +56,7 @@
     <h3>Controls <small>(H to hide)</small></h3>
     <ul>
       <li><b>Left-drag</b> on land: pan. <b>Right-drag</b>: rotate. <b>Wheel</b>: zoom. WASD/QE too.</li>
+      <li><b>Shift+drag</b> always pans (never grabs). <b>Ctrl+drag</b> rotates. <b>Alt+drag</b> draws a gesture.</li>
       <li><b>Click</b> a villager, tree, rock or heap to pick it up. Release to drop; flick to throw.</li>
       <li>Drop a villager on a field, house, altar, armoury, construction site, tree or rock to give them that job.</li>
       <li>Drop wood/ore/food on your temple to store it. Drop food on your creature to feed it.</li>
@@ -60,7 +64,7 @@
       <li>Miracles: number keys or the Miracles tab, then click. Hold Shift to keep casting.</li>
       <li><b>R</b> rotates a building ghost. <b>Right-click</b> cancels. <b>Space</b> centres on your temple. <b>F</b> finds your creature.</li>
       <li><b>Alt+click</b> a villager to hurry them. <b>Alt+drop</b> one on your altar to sacrifice them.</li>
-      <li><b>Ctrl+drag</b> draws a gesture: circle Water, V Heal, zigzag Fireball, vertical Lightning, horizontal Shield.</li>
+      <li>Gestures: circle Water, V Heal, zigzag Fireball, vertical Lightning, horizontal Shield.</li>
       <li>Walls and roads: pick them in Build, then drag a line on the ground.</li>
       <li><b>F5</b> quick save, <b>F9</b> quick load. <b>P</b> pause. <b>Y</b> photo mode. Click the minimap to jump.</li>
     </ul>

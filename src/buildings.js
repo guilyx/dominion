@@ -25,6 +25,7 @@
       const bp = d.line || b.kind === 'gate' ? 0 : pad;
       if (Math.abs(x - b.x) < hw + d.w / 2 + bp - 0.05 && Math.abs(z - b.z) < hd + d.d / 2 + bp - 0.05) return 'Overlaps a building';
     }
+    if (kind === 'mine' && !G.nearest(G.rocks, x, z, 9)) return 'Must be next to a vein';
     if (kind === 'center') { for (const t of G.towns) if (t.alive && dist(t.x, t.z, x, z) < 70) return 'Too close to another town'; return requireInfluence && !G.inInfluence(x, z) ? 'Outside your influence' : null; }
     if (requireInfluence && town && town.owner === 0 && !G.inInfluence(x, z)) return 'Outside your influence';
     if (town) { const c = G.center(town); if (c && dist(c.x, c.z, x, z) > 70) return 'Too far from the town'; }
@@ -35,8 +36,9 @@
     const def = BW.BUILDINGS[kind];
     // Clear trees and rocks under the footprint.
     for (const t of G.trees.slice()) if (Math.abs(t.x - x) < def.w / 2 + 0.5 && Math.abs(t.z - z) < def.d / 2 + 0.5) { if (town.owner === 0) G.deposit(town, 'wood', Math.floor(t.wood * 0.5)); G.remove(t); }
-    for (const r of G.rocks.slice()) if (Math.abs(r.x - x) < def.w / 2 + 0.5 && Math.abs(r.z - z) < def.d / 2 + 0.5) G.remove(r);
+    if (kind !== 'mine') for (const r of G.rocks.slice()) if (Math.abs(r.x - x) < def.w / 2 + 0.5 && Math.abs(r.z - z) < def.d / 2 + 0.5) G.remove(r);
     const b = G.addBuilding(kind, town, x, z, rot, built);
+    if (kind === 'mine') { const v = G.nearest(G.rocks, x, z, 9); b.vein = v ? v.kind : 'stone'; }
     return b;
   }
 
@@ -55,7 +57,7 @@
   // A player-built temple becomes the centre of a new town; its builders move in.
   function foundSettlement(G, b) {
     const n = G.playerTowns().length;
-    const t = G.addTown({ name: 'Settlement ' + n, owner: 0, color: 0, x: b.x, z: b.z, centerId: b.id, food: 120, wood: 120, ore: 20 });
+    const t = G.addTown({ name: 'Settlement ' + n, owner: 0, color: 0, x: b.x, z: b.z, centerId: b.id, food: 120, wood: 120, stone: 30, iron: 5, gold: 0 });
     b.town = t.id; b.newTown = false;
     for (const p of G.people) if (p.owner === 0 && p.workId === b.id) { p.town = t.id; p.job = 'idle'; p.workId = 0; }
     G.say(`${t.name} founded! Drop villagers on its temple to move them there.`, 'good');
@@ -118,6 +120,8 @@
         if (b.hp <= 0) { destroyBuilding(G, b, b._lastAttacker); continue; }
       }
       if (b.rain > 0) b.rain -= dt;
+      // Woodcutter's lodge: saplings sprout around it.
+      if (b.kind === 'lodge' && b.built) { b.timer += dt; if (b.timer > 6) { b.timer = 0; if (G.inRadius(G.trees, b.x, b.z, 18).length < 22) { for (let k = 0; k < 8; k++) { const a = BW.rand() * 6.28, r = 6 + BW.rand() * 12; const x = b.x + Math.sin(a) * r, z = b.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && G.terrain.slopeAt(x, z) < 0.7 && !G.buildingAt(x, z, 1.5) && !G.nearest(G.trees, x, z, 2.5)) { G.addTree(x, z, 0.3); break; } } } } }
       if (b.kind === 'house' && b.built && (G.season === 'winter' || !BW.isDay(G)) && BW.rand() < dt * 1.5) {
         const cs = Math.cos(b.rot), sn = Math.sin(b.rot); const lx = 1.2, lz = 1.0;
         G.particles.spawn(b.x + lx * cs + lz * sn, b.y + 4.3, b.z - lx * sn + lz * cs, (BW.rand() - 0.5) * 0.3, 0.9 + BW.rand() * 0.5, (BW.rand() - 0.5) * 0.3, 3.5, 0x555555, 2.6, -0.05);
@@ -148,6 +152,13 @@
         const fl = b._mesh.getObjectByName('flame'); if (fl) fl.scale.setScalar(0.9 + Math.sin(G.time * 9 + b.id) * 0.15);
         const orb = b._mesh.getObjectByName('orb'); if (orb) orb.position.y = (b.kind === 'wonder' ? 11 : 11.4) + Math.sin(G.time * 2 + b.id) * 0.3;
       }
+    }
+    // Forest regrowth: saplings grow, and every few seconds a thin patch seeds a new one.
+    G.regrowT = (G.regrowT || 0) + dt;
+    if (G.regrowT > 2) {
+      const step = G.regrowT; G.regrowT = 0;
+      for (const t of G.trees) if (t.size < 1.3 && !t.burnt && t.fire <= 0) { t.size = Math.min(1.3, t.size + step * 0.004); t.wood = Math.round(30 * t.size); t.hp = 40 * t.size; G.treesDirty = true; }
+      for (let k = 0; k < 3 && G.trees.length; k++) { const t = G.trees[Math.floor(BW.rand() * G.trees.length)]; if (t.burnt || t.size < 1) continue; if (G.inRadius(G.trees, t.x, t.z, 10).length < 5) { const a = BW.rand() * 6.28, r = 3 + BW.rand() * 5; const x = t.x + Math.sin(a) * r, z = t.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && G.terrain.slopeAt(x, z) < 0.7 && !G.buildingAt(x, z, 1.5) && !G.nearest(G.trees, x, z, 2.5)) G.addTree(x, z, 0.3); } }
     }
     // Trees on fire
     let any = false;

@@ -19,6 +19,10 @@
   }
 
   function unitOf(s) { return BW.UNITS[s.unit] || BW.UNITS.melee; }
+  // Raiders ignore civilians and buildings; only soldiers and creatures distract them.
+  function findArmed(G, s, r) {
+    return G.nearest(G.people, s.x, s.z, r, (q) => q.owner !== s.owner && q.job === 'soldier' && !q.inside) || G.nearest(G.creatures, s.x, s.z, r, (q) => q.owner !== s.owner && !q.downed);
+  }
   function reach(t, s) { const u = s ? unitOf(s) : BW.UNITS.melee; const base = t.type === 'building' ? BW.BUILDINGS[t.kind].w / 2 + 1.2 : t.type === 'creature' ? t.size * 1.6 + 1 : 1.5; return Math.max(base, u.range); }
 
   function blockedByShield(G, s, x, z) {
@@ -51,7 +55,21 @@
     for (const pl of G.platoons.slice()) {
       const n = G.updatePlatoonCenter(pl);
       if (!n) { G.remove(pl); continue; }
-      let target = pl.mode === 'attack' ? G.ents.get(pl.targetId) : null;
+      let target = pl.mode === 'attack' || pl.mode === 'raid' ? G.ents.get(pl.targetId) : null;
+      // Raids: reach the enemy field, strip it, walk the loot home.
+      if (pl.mode === 'raid') {
+        if (!target || target.dead) { pl.mode = 'idle'; pl.targetId = 0; }
+        else if (pl.members.some((id) => { const m = G.ents.get(id); return m && dist(m.x, m.z, target.x, target.z) < 5; })) {
+          const take = Math.round(20 + target.crop * 40); target.crop = 0.05; target._dirty = true;
+          pl.loot = (pl.loot || 0) + take; const et = G.ents.get(target.town); if (et) { et.loyalty -= 2; et.fearRecent = 60; }
+          G.particles.burst(target.x, target.y + 1, target.z, 20, 3, 0.8, 0xe0c040, 1.4, 2);
+          const home = G.ents.get(pl.town); const hc = home && G.center(home);
+          pl.mode = 'move'; pl.targetId = 0; pl.tx = hc ? hc.x + 8 : pl.x; pl.tz = hc ? hc.z + 6 : pl.z; pl.returning = true;
+          G.say(`Raiders seized ${take} food. Bringing it home.`, 'good'); BW.shiftAlignment(G, -0.01);
+          target = null;
+        }
+      }
+      if (pl.returning && pl.mode === 'idle' && pl.loot) { const home = G.ents.get(pl.town); if (home) { home.food += pl.loot; G.say(`${pl.loot} raided food stored.`, 'good'); } pl.loot = 0; pl.returning = false; }
       if (pl.mode === 'attack' && (!target || target.dead)) {
         // Enemy platoons keep hunting player buildings nearby; player platoons stop.
         if (pl.owner !== 0) {
@@ -68,10 +86,11 @@
         s.timer += dt;
         // Engage anything hostile that is close, whatever the mode.
         let enemy = s.engage && G.ents.get(s.engage); if (enemy && (enemy.dead || dist(enemy.x, enemy.z, s.x, s.z) > 16)) enemy = null;
-        if (!enemy && s.timer > 0.5) { s.timer = 0; enemy = findHostile(G, s, pl.mode === 'attack' ? 14 : 9); if (!enemy && s.pathFail > G.time) enemy = blockingWall(G, s); }
+        if (!enemy && s.timer > 0.5) { s.timer = 0; enemy = pl.mode === 'raid' ? findArmed(G, s, 8) : findHostile(G, s, pl.mode === 'attack' ? 14 : 9); if (!enemy && s.pathFail > G.time) enemy = blockingWall(G, s); }
         s.engage = enemy ? enemy.id : 0;
-        const goal = enemy || target;
+        const goal = enemy || (pl.mode === 'raid' ? null : target);
         const u = unitOf(s);
+        if (pl.mode === 'raid' && target && !enemy) { allArrived = false; s.state = 'walk'; BW.moveToward(G, s, target.x + (i % 3) * 1.5 - 1.5, target.z + Math.floor(i / 3) * 1.5, dt, u.speed, 1.2); return; }
         if (goal) {
           allArrived = false;
           s.state = 'walk';
@@ -124,7 +143,8 @@
   }
 
   function commandPlatoon(G, pl, x, z, target) {
-    if (target && target.owner !== pl.owner && ['person', 'building', 'creature'].includes(target.type)) { pl.mode = 'attack'; pl.targetId = target.id; }
+    if (target && target.type === 'building' && target.kind === 'field' && target.owner !== pl.owner && target.built) { pl.mode = 'raid'; pl.targetId = target.id; G.say('Raiding the field: your soldiers will pillage the crop and bring the food home.', 'info'); }
+    else if (target && target.owner !== pl.owner && ['person', 'building', 'creature'].includes(target.type)) { pl.mode = 'attack'; pl.targetId = target.id; }
     else { pl.mode = 'move'; pl.tx = x; pl.tz = z; pl.targetId = 0; }
     BW.audio.play('ui');
   }

@@ -132,3 +132,21 @@ small, .muted { color: var(--muted); }
 #modebar { display: none; padding: 6px 14px; font-size: 13px; color: var(--muted); }
 #modebar.open { display: block; }
 #modebar b { color: var(--gold); }
+
+.ico.stone { background: linear-gradient(135deg, #b0b0c0, #666677 60%, #444455); clip-path: polygon(50% 0, 100% 40%, 80% 100%, 20% 100%, 0 40%); border-radius: 0; }
+.ico.iron { background: linear-gradient(135deg, #d08060, #8a4a3a 60%, #5a2a1a); clip-path: polygon(50% 0, 100% 40%, 80% 100%, 20% 100%, 0 40%); border-radius: 0; }
+.ico.gold { background: radial-gradient(circle at 40% 35%, #fff4b0, #e0b830 60%, #9a7a1a); clip-path: polygon(50% 0, 100% 40%, 80% 100%, 20% 100%, 0 40%); border-radius: 0; }
+#renownbar > i { background: linear-gradient(90deg, #c9a54a, #fff1c0); }
+#renownrate { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+#stats { font-size: 12px; }
+#stats .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
+#stats .tile { background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+#stats .tile b { display: block; font-size: 16px; color: #fff; font-variant-numeric: tabular-nums; }
+#stats .tile span { color: var(--muted); font-size: 11px; }
+#stats .tile .rate { font-size: 11px; color: #c3c2b7; font-variant-numeric: tabular-nums; }
+#stats .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#stats .chart { background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+#stats .chart h4 { margin: 0 0 4px; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+#stats canvas { width: 100%; height: 120px; display: block; }
+#stats .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: #c3c2b7; margin-top: 4px; }
+#stats .legend i { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }

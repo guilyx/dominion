@@ -258,7 +258,10 @@
         this.downPos = { x: input.mx, y: input.my }; this.downT = performance.now();
         if (!this.hover) return;
         const h = this.hover, ent = this.hoverEnt;
-        if (input.keys.ControlLeft || input.keys.ControlRight) { this.gesture = [{ x: input.mx, y: input.my }]; return; }
+        const alt = input.keys.AltLeft || input.keys.AltRight, ctrl = input.keys.ControlLeft || input.keys.ControlRight, shift = input.keys.ShiftLeft || input.keys.ShiftRight;
+        if (ctrl) { this.camera.rotating = true; this.ctrlRotate = true; return; }
+        if (shift) { this.shiftPan = { x: input.mx, y: input.my }; this.camera.beginPan(input.mx, input.my); return; }
+        if (alt) { this.gesture = [{ x: input.mx, y: input.my }]; this.altSlap = ent && ent.type === 'person' && this.pickable(ent) && G.inInfluence(ent.x, ent.z) ? ent.id : 0; return; }
         if (this.mode) {
           if (this.mode.type === 'build') { if (BW.BUILDINGS[this.mode.kind].line) { this.lineStart = { x: h.x, y: h.y, z: h.z }; return; } return this.tryBuild(); }
           if (this.mode.type === 'miracle') { if (BW.castMiracle(G, this.mode.kind, h.x, h.z, 0)) { G.particles.burst(h.x, h.y + 1, h.z, 25, 5, 0.8, BW.MIRACLES[this.mode.kind].color, 2, 1, 3); if (!input.keys.ShiftLeft) this.setMode(null); } return; }
@@ -273,9 +276,6 @@
         }
         if (ent && this.pickable(ent)) {
           if (!G.inInfluence(ent.x, ent.z)) { G.say('That is outside your influence.', 'warn'); this.camera.beginPan(input.mx, input.my); return; }
-          if (ent.type === 'person' && (input.keys.AltLeft || input.keys.AltRight)) { // slap to hurry
-            ent.hurry = 10; ent.fear = 0.6; ent.fx = h.x + 1; ent.fz = h.z + 1; G.particles.burst(ent.x, ent.y + 1.5, ent.z, 8, 2, 0.4, 0xffcc66, 1.2); BW.audio.play('thud'); if (ent.owner === 0) BW.shiftAlignment(G, -0.002); return;
-          }
           this.pickUp(ent); return;
         }
         if (ent && ent.type === 'building') { G.selectedBuilding = ent.id; if (G.ui) G.ui.showBuilding(ent); }
@@ -290,11 +290,28 @@
       const G = this.G;
       if (e.button === 0) {
         this.camera.endPan();
+        if (this.ctrlRotate) { this.ctrlRotate = false; this.camera.rotating = false; return; }
+        if (this.shiftPan) {
+          const sp = this.shiftPan; this.shiftPan = null;
+          // A Shift-click without dragging still places or casts, keeping the mode.
+          if (Math.hypot(input.mx - sp.x, input.my - sp.y) < 6 && this.mode && this.hover) {
+            const h = this.hover;
+            if (this.mode.type === 'build' && !BW.BUILDINGS[this.mode.kind].line) this.tryBuild();
+            else if (this.mode.type === 'miracle') { if (BW.castMiracle(G, this.mode.kind, h.x, h.z, 0)) G.particles.burst(h.x, h.y + 1, h.z, 25, 5, 0.8, BW.MIRACLES[this.mode.kind].color, 2, 1, 3); }
+          }
+          return;
+        }
         if (this.gesture) {
           const pts = this.gesture; this.gesture = null; this.drawGesture();
+          if (pts.length < 4 && this.altSlap) { // Alt+click on a villager: hurry them
+            const v = G.ents.get(this.altSlap); this.altSlap = 0;
+            if (v && !v.dead) { v.hurry = 10; v.fear = 0.6; v.fx = v.x + 1; v.fz = v.z + 1; G.particles.burst(v.x, v.y + 1.5, v.z, 8, 2, 0.4, 0xffcc66, 1.2); BW.audio.play('thud'); if (v.owner === 0) BW.shiftAlignment(G, -0.002); }
+            return;
+          }
+          this.altSlap = 0;
           const kind = this.recognize(pts);
           if (kind) { let cx = 0, cy = 0; for (const p of pts) { cx += p.x; cy += p.y; } const gp = this.camera.groundPoint(cx / pts.length, cy / pts.length); if (gp) { G.say(`Gesture: ${BW.MIRACLES[kind].name}`, 'info'); BW.castMiracle(G, kind, gp.x, gp.z, 0); } }
-          else G.say('Gesture not recognised. Try a circle, V, zigzag, vertical or horizontal stroke.', 'warn');
+          else if (pts.length >= 4) G.say('Gesture not recognised. Try a circle, V, zigzag, vertical or horizontal stroke.', 'warn');
           return;
         }
         if (this.lineStart) {
@@ -377,6 +394,8 @@
             else if (b.kind === 'house') { e.job = 'breeder'; e.workId = b.id; }
             else if (b.kind === 'altar') { e.job = 'worshipper'; e.workId = b.id; }
             else if (b.kind === 'armory') { this.recruit(e, b); }
+            else if (b.kind === 'mine') { e.job = 'miner'; e.workId = b.id; }
+            else if (b.kind === 'lodge') { e.job = 'forester'; e.workId = 0; }
             else if (b.kind === 'center') { if (e.carry) { G.deposit(pt, e.carry.kind, e.carry.amount); e.carry = null; } e.job = 'idle'; e.workId = 0; }
             if (e.platoon && e.job !== 'soldier') { const pl = G.ents.get(e.platoon); if (pl) { const i = pl.members.indexOf(e.id); if (i >= 0) pl.members.splice(i, 1); if (!pl.members.length) G.remove(pl); } e.platoon = 0; e.maxHealth = 30; }
             G.say(`${e.name} is now a ${BW.JOB_NAMES[e.job]}.`, 'info');
@@ -396,7 +415,7 @@
     recruit(p, armory) {
       const G = this.G; const town = G.ents.get(p.town);
       let pl = G.platoons.find((q) => q.owner === 0 && q.members.length < 12 && dist(q.x, q.z, armory.x, armory.z) < 20);
-      if (!pl) { if (town.ore < 30) { G.say('A new platoon costs 30 ore.', 'warn'); return; } town.ore -= 30; pl = G.addPlatoon(town, [p]); pl.tx = armory.x + 7; pl.tz = armory.z + 2; pl.mode = 'move'; G.say(`${pl.name} formed.`, 'good'); }
+      if (!pl) { if (town.iron < 20) { G.say('A new platoon costs 20 iron.', 'warn'); return; } town.iron -= 20; pl = G.addPlatoon(town, [p]); pl.tx = armory.x + 7; pl.tz = armory.z + 2; pl.mode = 'move'; G.say(`${pl.name} formed.`, 'good'); }
       else { p.job = 'soldier'; p.platoon = pl.id; p.maxHealth = 60; p.health = 60; pl.members.push(p.id); }
     }
 

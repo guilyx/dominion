@@ -25,7 +25,7 @@
       ['builder', sites ? Math.min(6, sites * 2) : 0],
       ['farmer', Math.min(fields, Math.ceil(pop * 0.35)) + (town.food < 60 ? 1 : 0)],
       ['forester', town.wood < 120 ? 3 : town.wood < 400 ? 2 : 1],
-      ['miner', town.ore < 150 && G.rocks.length ? (town.owner === 0 ? 1 : 2) : 0],
+      ['miner', G.buildings.filter((b) => b.town === town.id && b.kind === 'mine' && b.built).length * 2 + (town.stone < 150 && G.nearest(G.rocks, town.x, town.z, 110) ? 1 : 0)],
       ['worshipper', altars ? 2 + Math.floor(pop / 7) : 0],
       ['breeder', houses ? 1 + Math.floor(pop / 12) : 0],
     ];
@@ -105,7 +105,7 @@
     if (!center) return;
     const rng = G.rng;
     // Slight passive income keeps the AI from stalling.
-    town.food += dt * 0.35; town.wood += dt * 0.45; town.ore += dt * (ai.aggression > 0.2 ? 0.25 : 0.1);
+    town.food += dt * 0.35; town.wood += dt * 0.45; town.stone += dt * 0.3; town.iron += dt * (ai.aggression > 0.2 ? 0.15 : 0.06); town.gold += dt * 0.04;
     if (T.think < 3) return;
     T.think = 0;
     const pop = people.length, cap = G.townCapacity(town);
@@ -116,24 +116,30 @@
       let kind = null;
       if (pop >= cap - 3 && town.wood >= 40) kind = 'house';
       else if (count('field') < Math.ceil(pop / 5) && town.wood >= 15) kind = 'field';
-      else if (!count('altar') && pop >= 10 && town.wood >= 90) kind = 'altar';
-      else if (!count('armory') && ai.aggression > 0.15 && pop >= 14 && town.wood >= 160 && town.ore >= 60) kind = 'armory';
-      else if (ai.aggression > 0.4 && count('tower') < 2 && pop > 18 && town.wood >= 90 && town.ore >= 50) kind = 'tower';
-      else if (pop > 28 && !count('wonder') && town.wood >= 450 && town.ore >= 180) kind = 'wonder';
+      else if (!count('altar') && pop >= 10 && town.wood >= 60 && town.stone >= 40) kind = 'altar';
+      else if (!count('mine') && pop >= 12 && town.wood >= 80 && town.stone >= 20 && G.nearest(G.rocks, center.x, center.z, 45)) kind = 'mine';
+      else if (!count('lodge') && pop >= 14 && town.wood >= 60) kind = 'lodge';
+      else if (!count('armory') && ai.aggression > 0.15 && pop >= 14 && town.wood >= 120 && town.stone >= 60 && town.iron >= 20) kind = 'armory';
+      else if (!count('shrine') && pop >= 16 && town.wood >= 100 && town.stone >= 50) kind = 'shrine';
+      else if (ai.aggression > 0.4 && count('tower') < 2 && pop > 18 && town.stone >= 90 && town.iron >= 10) kind = 'tower';
+      else if (pop > 22 && !count('statue') && town.stone >= 140 && town.gold >= 30) kind = 'statue';
+      else if (pop > 28 && !count('wonder') && town.stone >= 320 && town.gold >= 120) kind = 'wonder';
       else if (!count('storehouse') && (town.wood > town.cap_ * 0.85 || town.food > town.cap_ * 0.85) && town.wood >= 120) kind = 'storehouse';
       else if (town.wood >= 60 && count('house') < pop / 4) kind = 'house';
       if (kind) {
-        const spot = BW.findSpot(G, kind, town, center.x, center.z, 9, 12 + Math.min(30, count('house') * 3 + count('field') * 3), rng);
+        let spot;
+        if (kind === 'mine') { const v = G.nearest(G.rocks, center.x, center.z, 45); spot = v && BW.findSpot(G, kind, town, v.x, v.z, 4, 9, rng); }
+        else spot = BW.findSpot(G, kind, town, center.x, center.z, 9, 12 + Math.min(30, count('house') * 3 + count('field') * 3), rng);
         if (spot) { G.pay(town, BW.BUILDINGS[kind].cost); BW.placeBuilding(G, kind, town, spot.x, spot.z, spot.rot); }
       }
     }
     // Military
     const armory = bs.find((b) => b.kind === 'armory' && b.built);
     const soldiers = people.filter((p) => p.job === 'soldier').length;
-    if (armory && G.time > (T.nextTrain || 0) && pop - soldiers >= 12 && town.ore >= 30) {
+    if (armory && G.time > (T.nextTrain || 0) && pop - soldiers >= 12 && town.iron >= 20) {
       const cands = people.filter((p) => p.job !== 'soldier' && p.job !== 'builder' && p.job !== 'farmer' && !p.held && !p.inside).slice(0, 5 + Math.round(ai.aggression * 3));
       if (cands.length >= 5) {
-        town.ore -= 30;
+        town.iron -= 20;
         const pl = G.addPlatoon(town, cands);
         const unit = ai.aggression > 0.4 && G.landIndex >= 1 && rng.next() < 0.35 ? 'archer' : ai.aggression > 0.5 && G.landIndex >= 2 && rng.next() < 0.2 ? 'siege' : 'melee';
         for (const id of pl.members) { const s = G.ents.get(id); s.unit = unit; s.maxHealth = BW.UNITS[unit].hp; s.health = s.maxHealth; }
@@ -186,6 +192,7 @@
       const people = byTown.get(t.id);
       t.pop = people.length; t.cap = G.townCapacity(t); t.impress = G.townImpress(t); t.cap_ = G.storageCap(t);
       t.hasAltar = G.buildings.some((b) => b.town === t.id && b.kind === 'altar' && b.built);
+      if (t.timers.tick === undefined || t.timers.tick + dt >= 1) { const c = G.center(t); t.guards = c ? people.filter((p) => p.job === 'soldier' && dist(p.x, p.z, c.x, c.z) < 40).length : 0; }
       t.fear = Math.max(0, (t.fear || 0) - dt * 0.3); t.fearRecent = Math.max(0, (t.fearRecent || 0) - dt);
       if (G.season === 'winter' && t.pop) { t.wood = Math.max(0, t.wood - dt * t.pop * 0.02); }
       if (people.some((p) => p.trait === 'chosen')) t.impress += 20;
@@ -218,6 +225,17 @@
     god.influence += (Math.min(infl, 230) - god.influence) * Math.min(1, dt * 0.5);
     god.maxPrayer = 800 + pop0 * 40 + (G.hasUnlock('g_prayer') ? 600 : 0);
     god.prayer = Math.min(god.maxPrayer, god.prayer + dt * (0.6 + pop0 * 0.02)); // trickle of belief
+    // Renown: a steady trickle towards the next Tribute point, so unlocks never feel random.
+    let hap = 0, n = 0; for (const t of G.playerTowns()) if (t.happiness !== undefined) { hap += t.happiness; n++; } hap = n ? hap / n : 0.8;
+    god.renownRate = pop0 * 1.2 + god.impress * 0.6 + hap * pop0 * 0.6; // per minute
+    god.renown += god.renownRate / 60 * dt;
+    if (god.renown >= 300) { god.renown -= 300; grantTribute(G, 1, 'Renown'); }
+    // History for the stats tab: one sample every 5 seconds, 30 minutes kept.
+    G.historyT += dt;
+    if (G.historyT >= 5) {
+      G.historyT = 0; const pt = G.playerTown();
+      if (pt) { const tot = {}; for (const k of BW.RESOURCES) tot[k] = 0; for (const t of G.playerTowns()) for (const k of BW.RESOURCES) tot[k] += t[k] || 0; G.history.push({ t: Math.round(G.time), pop: pop0, food: Math.round(tot.food), wood: Math.round(tot.wood), stone: Math.round(tot.stone), iron: Math.round(tot.iron), gold: Math.round(tot.gold), prayer: Math.round(god.prayer), happy: +hap.toFixed(2), tribute: god.tribute }); if (G.history.length > 360) G.history.shift(); }
+    }
     // Tribute milestones
     god.popMilestone = god.popMilestone || 20;
     if (pop0 >= god.popMilestone) { grantTribute(G, 1, `${god.popMilestone} villagers`); god.popMilestone += 15; }

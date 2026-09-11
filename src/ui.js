@@ -158,6 +158,86 @@
       else if (this.tab === 'army') this.renderArmy();
       else if (this.tab === 'tribute') this.renderTribute();
       else if (this.tab === 'menu') this.renderMenu();
+      else if (this.tab === 'stats') this.renderStats();
+    }
+
+    // ------------------------------------------------------------ stats
+    // Rates are averaged over the last minute of history samples (one per 5 s).
+    rates() {
+      const H = this.G.history; if (H.length < 2) return null;
+      const last = H[H.length - 1]; let i = H.length - 1; while (i > 0 && last.t - H[i].t < 60) i--;
+      const base = H[i]; const dtm = Math.max(1, (last.t - base.t)) / 60;
+      const r = {}; for (const k of ['pop', 'food', 'wood', 'stone', 'iron', 'gold', 'prayer']) r[k] = (last[k] - base[k]) / dtm;
+      return r;
+    }
+    renderStats() {
+      const G = this.G, p = this.subpanel;
+      const SERIES = [['food', '#c98500'], ['stone', '#9085e9'], ['wood', '#d95926'], ['gold', '#199e70'], ['iron', '#e66767']];
+      p.innerHTML = `<div id="stats"><h3>Stats <small>— rates are per minute over the last minute</small></h3>
+        <div class="tiles" id="st-tiles"></div>
+        <div class="charts">
+          <div class="chart"><h4>Population, last 30 min</h4><canvas id="st-pop" width="380" height="120"></canvas></div>
+          <div class="chart"><h4>Stockpiles, last 30 min</h4><canvas id="st-res" width="380" height="120"></canvas><div class="legend">${SERIES.map(([k, c]) => `<span><i style="background:${c}"></i>${BW.RES_NAMES[k]}</span>`).join('')}</div></div>
+          <div class="chart"><h4>Who does what</h4><canvas id="st-jobs" width="380" height="120"></canvas></div>
+          <div class="chart"><h4>What people lack (average need met)</h4><canvas id="st-needs" width="380" height="120"></canvas></div>
+        </div></div>`;
+      this.statsSeries = SERIES;
+      this.refreshStats();
+    }
+    refreshStats() {
+      const G = this.G; if (!$('st-tiles')) return;
+      const r = this.rates() || {};
+      const town = G.playerTown(); const people = town && G.byTown ? (G.byTown.get(town.id) || []) : [];
+      const fmtR = (v) => v === undefined ? '' : (v >= 0 ? '+' : '') + v.toFixed(1) + '/min';
+      const tiles = [['Population', G.god.pop || 0, fmtR(r.pop)], ['Food', Math.round(town ? town.food : 0), fmtR(r.food)], ['Wood', Math.round(town ? town.wood : 0), fmtR(r.wood)], ['Stone', Math.round(town ? town.stone : 0), fmtR(r.stone)], ['Iron', Math.round(town ? town.iron : 0), fmtR(r.iron)], ['Gold', Math.round(town ? town.gold : 0), fmtR(r.gold)], ['Prayer', Math.round(G.god.prayer), fmtR(r.prayer)], ['Happiness', Math.round((town && town.happiness !== undefined ? town.happiness : 0.8) * 100) + '%', ''], ['Impressiveness', Math.round(G.god.impress || 0), ''], ['Influence', Math.round(G.god.influence) + ' m', ''], ['Renown', Math.round(G.god.renown) + '/300', '+' + G.god.renownRate.toFixed(0) + '/min'], ['Soldiers', people.filter((q) => q.job === 'soldier').length, town && town.guards >= 3 ? 'guarding' : '']];
+      $('st-tiles').innerHTML = tiles.map(([n, v, rate]) => `<div class="tile"><span>${n}</span><b>${v}</b><div class="rate">${rate}</div></div>`).join('');
+      const H = G.history;
+      this.lineChart($('st-pop'), H, [['pop', '#3987e5']]);
+      this.lineChart($('st-res'), H, this.statsSeries);
+      const counts = BW.countJobs(G, town, people);
+      this.barChart($('st-jobs'), BW.JOBS.map((j) => [BW.JOB_NAMES[j], counts[j]]), '#3987e5');
+      const needs = { food: 0, home: 0, worship: 0, safety: 0, rest: 0 }; let n = 0;
+      for (const q of people) if (q.needs) { n++; for (const k in needs) needs[k] += q.needs[k]; }
+      this.barChart($('st-needs'), Object.keys(needs).map((k) => [k.charAt(0).toUpperCase() + k.slice(1), n ? Math.round(needs[k] / n * 100) : 0]), '#199e70', 100, '%');
+    }
+    // Thin lines, one y axis, direct end labels, recessive grid.
+    lineChart(canvas, H, series) {
+      const ctx = canvas.getContext('2d'); const W = canvas.width, Hh = canvas.height; ctx.clearRect(0, 0, W, Hh);
+      const L = 34, R = 46, T = 8, B = 18;
+      if (H.length < 2) { ctx.fillStyle = '#c3c2b7'; ctx.font = '11px Nunito, sans-serif'; ctx.fillText('Collecting data…', L, Hh / 2); return; }
+      let max = 1; for (const s of H) for (const [k] of series) max = Math.max(max, s[k] || 0);
+      const nice = Math.pow(10, Math.floor(Math.log10(max))); max = Math.ceil(max / nice) * nice;
+      const t0 = H[0].t, t1 = H[H.length - 1].t, span = Math.max(60, t1 - t0);
+      const x = (t) => L + (t - t0) / span * (W - L - R), y = (v) => T + (1 - v / max) * (Hh - T - B);
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.fillStyle = '#c3c2b7'; ctx.font = '10px Nunito, sans-serif'; ctx.textAlign = 'right';
+      for (let i = 0; i <= 2; i++) { const v = max * i / 2; ctx.beginPath(); ctx.moveTo(L, y(v)); ctx.lineTo(W - R, y(v)); ctx.stroke(); ctx.fillText(BW.fmt(v), L - 4, y(v) + 3); }
+      ctx.textAlign = 'center'; ctx.fillText(Math.round(span / 60) + ' min ago', L + 30, Hh - 4); ctx.fillText('now', W - R, Hh - 4);
+      ctx.lineWidth = 2; ctx.lineJoin = 'round';
+      const last = H[H.length - 1];
+      for (const [k, col] of series) {
+        ctx.strokeStyle = col; ctx.beginPath();
+        H.forEach((s, i) => { const px = x(s.t), py = y(s[k] || 0); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+        ctx.stroke();
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(last.t), y(last[k] || 0), 3, 0, 6.28); ctx.fill();
+      }
+      // End labels, pushed apart so they never overlap.
+      const labels = series.map(([k]) => ({ v: last[k] || 0, y: y(last[k] || 0) })).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 11) labels[i].y = labels[i - 1].y + 11;
+      ctx.fillStyle = '#f0e6d2'; ctx.textAlign = 'left';
+      for (const l of labels) ctx.fillText(BW.fmt(l.v), x(last.t) + 6, l.y + 3);
+    }
+    barChart(canvas, rows, col, max, suffix = '') {
+      const ctx = canvas.getContext('2d'); const W = canvas.width, Hh = canvas.height; ctx.clearRect(0, 0, W, Hh);
+      const L = 78, R = 40; const n = rows.length; const rh = Math.min(14, (Hh - 6) / n); const gap = 3;
+      const m = max || Math.max(1, ...rows.map((r) => r[1]));
+      ctx.font = '10px Nunito, sans-serif';
+      rows.forEach(([name, v], i) => {
+        const yy = 4 + i * rh; const w = (W - L - R) * (v / m);
+        ctx.fillStyle = '#c3c2b7'; ctx.textAlign = 'right'; ctx.fillText(name, L - 6, yy + rh - gap - 1);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(L, yy, W - L - R, rh - gap);
+        ctx.fillStyle = col; ctx.fillRect(L, yy, Math.max(w, v > 0 ? 2 : 0), rh - gap);
+        ctx.fillStyle = '#f0e6d2'; ctx.textAlign = 'left'; ctx.fillText(v + suffix, L + w + 4, yy + rh - gap - 1);
+      });
     }
 
     selectMiracle(k) {
@@ -220,6 +300,8 @@
         for (const k in c.learned) w('cr-l-' + k, c.learned[k]);
         ['follow', 'free', 'stay'].forEach((l) => { const b = $('cr-' + l); if (b) b.classList.toggle('active', c.leash === l); });
         const sb = $('cr-send'); if (sb) sb.classList.toggle('active', !!(mode && mode.type === 'send'));
+      } else if (this.tab === 'stats') {
+        if (!this.statsT || performance.now() - this.statsT > 1000) { this.statsT = performance.now(); this.refreshStats(); }
       } else if (this.tab === 'army') {
         const sig = G.platoons.filter((q) => q.owner === 0).map((q) => q.id + ':' + q.members.length + ':' + q.mode).join('|') + '#' + G.selectedPlatoon + (mode && mode.type === 'army' ? 'a' : '');
         if (sig !== this.armySig) { this.armySig = sig; this.renderArmy(); }
@@ -246,7 +328,7 @@
       const G = this.G, p = this.subpanel;
       const cats = {};
       for (const [k, u] of Object.entries(BW.UNLOCKS)) (cats[u.cat] = cats[u.cat] || []).push([k, u]);
-      p.innerHTML = `<h3>Tribute <small>— you have <b style="color:#fff">${G.god.tribute}</b>. Earn it by growing, converting towns and building wonders.</small></h3>` +
+      p.innerHTML = `<h3>Tribute <small>— you have <b style="color:#fff">${G.god.tribute}</b>.</small></h3><div class="desc" style="margin:0 0 6px">Renown flows in at <b style="color:#fff">${G.god.renownRate.toFixed(0)}/min</b> from population (${Math.round((G.god.pop || 0) * 1.2)}), impressiveness (${Math.round((G.god.impress || 0) * 0.6)}) and happiness. Every 300 renown is 1 Tribute (${Math.round(G.god.renown)}/300 now). Bonus Tribute: every 15 villagers, first miracle, first steps, wonders, towns won, lands won.</div>` +
         Object.entries(cats).map(([cat, list]) => `<div style="margin-top:6px"><small>${cat}</small><div class="items">` + list.map(([k, u]) => {
           const have = !!G.god.unlocks[k];
           return `<div class="item ${have ? 'active' : G.god.tribute < u.cost ? 'locked' : ''}" data-unlock="${k}" title="${esc(u.desc)}"><b>${u.name}</b><span class="cost">${have ? 'Unlocked' : u.cost + ' tribute'}</span></div>`;
@@ -317,8 +399,9 @@
       if (!e) return '';
       if (e.type === 'person') { const t = G.ents.get(e.town); const yrs = Math.floor(e.age / 300); return `${e.name || 'Villager'} · ${e.age < 300 ? 'child' : yrs >= 5 ? 'elder' : 'adult'}, ${yrs} yrs · ${e.job === 'soldier' ? (BW.UNITS[e.unit] || BW.UNITS.melee).name : BW.JOB_NAMES[e.job]}${t ? ' · ' + t.name : ' · wild'}\nHealth ${Math.ceil(e.health)}/${e.maxHealth} · Hunger ${Math.round(e.hunger)}% · Happy ${Math.round((e.happy || 0) * 100)}%${e.trait ? '\n' + BW.TRAITS[e.trait] : ''}${e.desire ? '\n' + BW.NEED_NAMES[e.desire] : ''}${e.carry ? `\nCarrying ${e.carry.amount} ${e.carry.kind}` : ''}${e.state === 'sleep' ? '\nSleeping' : ''}`; }
       if (e.type === 'tree') return `Tree · ${e.wood} wood${e.fire > 0 ? ' · burning!' : ''}`;
-      if (e.type === 'rock') return `Rock · ${e.ore} ore`;
+      if (e.type === 'rock') return `${e.kind === 'iron' ? 'Iron vein' : e.kind === 'gold' ? 'Gold vein' : 'Rock'} · ${e.ore} ${e.kind || 'stone'}${e.kind !== 'stone' ? '\nBuild a Mine next to it for endless ' + e.kind : ''}`;
       if (e.type === 'item') return `Heap of ${Math.round(e.amount)} ${e.kind}\nDrop it on a temple to store it`;
+      if (e.type === 'building' && e.kind === 'mine') { const d = BW.BUILDINGS[e.kind]; const t = G.ents.get(e.town); return `${d.name} (${e.vein || 'stone'})${t ? ' · ' + t.name : ''}\nHP ${Math.ceil(e.hp)}/${e.maxHp}${e.built ? '' : ` · building ${Math.round(e.progress * 100)}%`} · ${G.people.filter((p) => p.workId === e.id).length}/3 miners`; }
       if (e.type === 'creature') return `${e.owner === 0 ? 'Your' : 'Enemy'} ${e.name} · size ${e.size.toFixed(1)}\nHealth ${Math.ceil(e.health)}/${Math.ceil(e.maxHealth)}${e.owner === 0 ? ` · Hunger ${Math.round(e.hunger)}%\n${BW.CREATURE_ACTION_NAMES[e.state] || e.state}` : ''}`;
       if (e.type === 'building') { const d = BW.BUILDINGS[e.kind]; const t = G.ents.get(e.town); return `${e.owner === 0 && e.kind === 'center' ? 'Your Temple' : e.kind === 'center' ? 'Great Hall' : d.name}${t ? ' · ' + t.name : ''}\nHP ${Math.ceil(e.hp)}/${e.maxHp}${e.built ? '' : ` · building ${Math.round(e.progress * 100)}%`}${e.kind === 'field' ? ` · crop ${Math.round(e.crop * 100)}%` : ''}${e.fire > 0 ? '\nON FIRE' : ''}`; }
       return '';
@@ -346,6 +429,9 @@
       $('alignbar').firstElementChild.style.left = ((god.alignment + 1) / 2 * 100) + '%';
       $('aligntext').textContent = god.alignment > 0.6 ? 'Benevolent' : god.alignment > 0.2 ? 'Good' : god.alignment < -0.6 ? 'Malevolent' : god.alignment < -0.2 ? 'Evil' : 'Neutral';
       $('tribute').textContent = god.tribute;
+      $('renownbar').firstElementChild.style.width = clamp(god.renown / 300 * 100, 0, 100) + '%';
+      const mins = god.renownRate > 0 ? (300 - god.renown) / god.renownRate : 0;
+      $('renownrate').textContent = god.renownRate > 0 ? `+${god.renownRate.toFixed(0)} renown/min · next in ${mins < 1 ? '<1' : Math.ceil(mins)} min` : '';
       $('influence').textContent = Math.round(god.influence) + ' m';
       const day = Math.floor(G.time / G.dayLength) + 1; const hour = Math.floor(G.tod * 24);
       const wk = G.weather.kind; $('clock').textContent = `Day ${day} · ${String(hour).padStart(2, '0')}:00 · ${G.season}${wk !== 'clear' ? ' · ' + wk : ''}${this.game.paused ? ' · PAUSED' : this.game.speed > 1 ? ' · ' + this.game.speed + 'x' : ''}`;
@@ -355,7 +441,7 @@
         $('townname').textContent = town.name;
         $('pop').textContent = `${G.playerTowns().reduce((s, t) => s + (t.pop || 0), 0)} / ${G.playerTowns().reduce((s, t) => s + (t.cap || 0), 0)}`;
         const cap = town.cap_ || G.storageCap(town);
-        $('food').textContent = fmt(town.food) + ' / ' + fmt(cap); $('wood').textContent = fmt(town.wood) + ' / ' + fmt(cap); $('ore').textContent = fmt(town.ore) + ' / ' + fmt(cap);
+        for (const k of BW.RESOURCES) { const el = $(k); if (el) el.textContent = fmt(town[k] || 0) + ' / ' + fmt(cap); }
         $('impress').textContent = Math.round(god.impress);
         const hp = Math.round((town.happiness === undefined ? 0.8 : town.happiness) * 100);
         $('happy').textContent = hp + '%'; $('happy').style.color = hp < 45 ? '#ff8a70' : hp > 70 ? '#8fd48f' : '';
