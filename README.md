@@ -55,6 +55,8 @@ Touch works too: one finger pans or grabs, two fingers pinch to zoom and twist t
 
 ## How it works
 
+**Building** is on a hex grid: pick a building and the ghost snaps to the nearest tile, one building per tile, with the grid shown around your cursor while you place. Walls, gates and roads are free-form lines. The menu tucks away while you place so you can see the ground.
+
 **Villagers** eat, sleep in houses at night, and work a job. Drop a villager on a field, house,
 altar, armoury, construction site, tree or rock to give them that job. "Auto-assign jobs" lets
 the town manage itself; turn it off for full control. Food comes from fields, wood from trees,

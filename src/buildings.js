@@ -15,7 +15,10 @@
     let hmin = 1e9, hmax = -1e9;
     for (const [ox, oz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [0, 0], [0, hd], [0, -hd], [hw, 0], [-hw, 0]]) { const h = T.heightAt(x + ox, z + oz); hmin = Math.min(hmin, h); hmax = Math.max(hmax, h); }
     if (hmax - hmin > 3.2) return 'Ground too steep';
-    const pad = def.line || kind === 'gate' ? 0 : 1;
+    // Tile buildings sit one per hex; walls, gates and roads are free-form.
+    const tiled = !def.line && kind !== 'gate';
+    if (tiled) { const h = BW.hex.toHex(x, z); for (const b of G.buildings) { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') continue; const bh = BW.hex.toHex(b.x, b.z); if (bh.q === h.q && bh.r === h.r) return 'Tile occupied'; } }
+    const pad = def.line || kind === 'gate' ? 0 : 0.6;
     for (const b of G.buildings) {
       const d = BW.BUILDINGS[b.kind];
       if (d.road && def.road) continue;
@@ -164,7 +167,9 @@
   function findSpot(G, kind, town, cx, cz, rmin, rmax, rng, tries = 30) {
     for (let i = 0; i < tries; i++) {
       const a = rng.next() * Math.PI * 2, r = rmin + rng.next() * (rmax - rmin);
-      const x = cx + Math.sin(a) * r, z = cz + Math.cos(a) * r;
+      let x = cx + Math.sin(a) * r, z = cz + Math.cos(a) * r;
+      const def = BW.BUILDINGS[kind];
+      if (!def.line && kind !== 'gate') { const s = BW.hex.snap(x, z); x = s.x; z = s.z; }
       if (!footprintOk(G, kind, x, z, town, false)) return { x, z, rot: Math.round(a / (Math.PI / 2)) * (Math.PI / 2) };
     }
     return null;
@@ -186,5 +191,6 @@
     return { placed, err };
   }
 
+  BW.hexOccupied = (G, q, r) => G.buildings.some((b) => { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') return false; const h = BW.hex.toHex(b.x, b.z); return h.q === q && h.r === r; });
   Object.assign(BW, { footprintOk, placeBuilding, completeBuilding, damageBuilding, destroyBuilding, igniteBuilding, igniteTree, updateBuildings, findSpot, placeLine, foundSettlement });
 })(window.BW);

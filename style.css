@@ -128,3 +128,7 @@ small, .muted { color: var(--muted); }
 #ui.photo > *:not(#overlay):not(#gesture) { display: none !important; }
 #skirmish { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
 #skirmish input, #skirmish select { font: inherit; background: #1a1410; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; width: 110px; }
+
+#modebar { display: none; padding: 6px 14px; font-size: 13px; color: var(--muted); }
+#modebar.open { display: block; }
+#modebar b { color: var(--gold); }

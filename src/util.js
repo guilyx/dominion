@@ -240,5 +240,23 @@ window.BW = window.BW || {};
     }
   }
 
-  Object.assign(BW, { Grid, NavGrid, Heap });
+  // Flat-top hex grid used for building placement (Civilization-style tiles).
+  const HEX_R = 5.6, SQ3 = Math.sqrt(3);
+  const hex = {
+    R: HEX_R,
+    center(q, r) { return { x: HEX_R * 1.5 * q, z: HEX_R * SQ3 * (r + q / 2) }; },
+    toHex(x, z) {
+      const qf = (2 / 3 * x) / HEX_R, rf = (-1 / 3 * x + SQ3 / 3 * z) / HEX_R;
+      let q = Math.round(qf), r = Math.round(rf); const s = Math.round(-qf - rf);
+      const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s + qf + rf);
+      if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+      return { q, r };
+    },
+    snap(x, z) { const h = hex.toHex(x, z); return Object.assign(hex.center(h.q, h.r), h); },
+    key(q, r) { return q * 100003 + r; },
+    same(ax, az, bx, bz) { const a = hex.toHex(ax, az), b = hex.toHex(bx, bz); return a.q === b.q && a.r === b.r; },
+    corners(cx, cz) { const out = []; for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; out.push({ x: cx + Math.cos(a) * HEX_R, z: cz + Math.sin(a) * HEX_R }); } return out; },
+  };
+
+  Object.assign(BW, { Grid, NavGrid, Heap, hex });
 })(window.BW);
