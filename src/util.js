@@ -241,7 +241,7 @@ window.BW = window.BW || {};
   }
 
   // Flat-top hex grid used for building placement (Civilization-style tiles).
-  const HEX_R = 5.6, SQ3 = Math.sqrt(3);
+  const HEX_R = 7.0, SQ3 = Math.sqrt(3);
   const hex = {
     R: HEX_R,
     center(q, r) { return { x: HEX_R * 1.5 * q, z: HEX_R * SQ3 * (r + q / 2) }; },

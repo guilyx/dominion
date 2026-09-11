@@ -117,6 +117,7 @@
       G.god.alignment = P.alignment; G.god.tribute = P.tribute; G.god.unlocks = Object.assign({}, P.unlocks);
       // Camera + hand
       this.camera = new BW.GodCamera(this.gfx, terrain);
+      try { this.camera.edgeScroll = localStorage.getItem('dominion_edge') !== '0'; } catch (e) { this.camera.edgeScroll = true; }
       G.camera = this.camera;
       this.hand = new BW.Hand(G, this.camera); G.hand = this.hand; G.ui = this.ui;
       this.camera.lookAt(ps.x, ps.z);
@@ -138,7 +139,7 @@
       c.leash = 'free';
       // Influence ring
       G.inflRing = BW.groundRing(G.god.influence, 0xffe9a0, 160); this.gfx.world.add(G.inflRing);
-      G.grass = new BW.Grass(6000); this.gfx.world.add(G.grass.mesh);
+      G.grass = new BW.Grass(3500); this.gfx.world.add(G.grass.mesh);
       G.god.influence = 45;
       G.season = 'spring';
       terrain.recolor(G.god.alignment, 'spring');
@@ -159,11 +160,11 @@
       if (isPlayer) for (let i = 1; i <= 3; i++) { const x = town.x, z = town.z + 6 + i * 4; if (!BW.footprintOk(G, 'road', x, z, town, false)) BW.placeBuilding(G, 'road', town, x, z, 0, true); }
       const put = (kind, rmin, rmax) => { const s = BW.findSpot(G, kind, town, town.x, town.z, rmin, rmax, rng, 40); if (s) BW.placeBuilding(G, kind, town, s.x, s.z, s.rot, true); };
       const houses = Math.ceil(pop / 5) + 1;
-      for (let i = 0; i < houses; i++) put('house', 9, 24);
-      for (let i = 0; i < Math.max(2, Math.ceil(pop / 6)); i++) put('field', 14, 32);
-      put('altar', 10, 22);
-      // Every town gets a stone outcrop, an iron vein and a gold vein within reach.
-      for (const kind of ['stone', 'stone', 'iron', 'gold']) for (let i = 0; i < 30; i++) { const a = rng.next() * 6.28, r = 26 + rng.next() * 14; const x = town.x + Math.sin(a) * r, z = town.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && !G.buildingAt(x, z, 3) && !G.nearest(G.rocks, x, z, 8)) { G.addRock(x, z, 1.2 + rng.next() * 0.8, kind); break; } }
+      for (let i = 0; i < houses; i++) put('house', 12, 30);
+      for (let i = 0; i < Math.max(2, Math.ceil(pop / 6)); i++) put('field', 16, 40);
+      put('altar', 12, 26);
+      // Every town gets stone outcrops, two iron veins and a gold vein within easy reach.
+      for (const kind of ['stone', 'stone', 'iron', 'iron', 'gold']) for (let i = 0; i < 40; i++) { const a = rng.next() * 6.28, r = 20 + rng.next() * 16; const x = town.x + Math.sin(a) * r, z = town.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && !G.buildingAt(x, z, 3) && !G.rocks.some((rk) => BW.dist(rk.x, rk.z, x, z) < 7)) { G.addRock(x, z, 1.5 + rng.next() * 0.8, kind); break; } }
       for (let i = 0; i < pop; i++) { const a = rng.next() * 6.28, r = 6 + rng.next() * 10; G.addPerson(town, town.x + Math.sin(a) * r, town.z + Math.cos(a) * r, 'idle'); }
     }
 
@@ -187,7 +188,7 @@
         const cold = w.tundra + w.badlands + (h > 18 ? 0.6 : 0), wet = w.swamp + w.jungle + w.desert;
         tree.kind = cold > wet + 0.2 ? 0 : wet > cold + 0.2 ? 1 : tree.kind;
       }
-      const nr = Math.floor(land.size / 9);
+      const nr = Math.floor(land.size / 5);
       for (let i = 0; i < nr; i++) {
         const x = rng.range(-half + 4, half - 4), z = rng.range(-half + 4, half - 4);
         const h = T.heightAt(x, z);
@@ -369,6 +370,8 @@
       if (k === 'KeyR' && this.hand.ghost) { this.hand.ghostRot += Math.PI / 2; return; }
       if (k === 'Space') { const t = G.playerTown(); if (t) this.camera.lookAt(t.x, t.z); return; }
       if (k === 'KeyF') { const c = G.playerCreature(); if (c) this.camera.lookAt(c.x, c.z); return; }
+      if (k === 'KeyK') { if (G.playerCreature()) this.hand.setMode(this.hand.mode && this.hand.mode.type === 'creatureAttack' ? null : { type: 'creatureAttack' }); return; }
+      if (k === 'KeyG') { if (G.playerCreature()) this.hand.setMode(this.hand.mode && this.hand.mode.type === 'creatureGuard' ? null : { type: 'creatureGuard' }); return; }
       if (k === 'F5') { e.preventDefault(); this.save(); return; }
       if (k === 'F9') { e.preventDefault(); this.load('quick'); return; }
       if (/^Digit[1-9]$/.test(k)) { const kind = BW.MIRACLE_ORDER[+k.slice(5) - 1]; if (kind) this.ui.selectMiracle(kind); return; }

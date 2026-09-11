@@ -26,6 +26,13 @@
     statue:  { name: 'Statue', w: 5, d: 5, hp: 500, cost: { stone: 140, gold: 30 }, impress: 45, buildTime: 70, unlock: 'b_statue', desc: 'A gilded likeness of you. Serious impressiveness for the mid game.' },
     wonder:  { name: 'Wonder', w: 9, d: 9, hp: 1200, cost: { stone: 320, gold: 120 }, impress: 90, buildTime: 120, unlock: 'b_wonder', desc: 'A monument of enormous impressiveness. Converts nearby towns through awe.' },
   };
+  // Upgrades: three levels. Each level scales the mesh to fill more of its hex
+  // and multiplies what the building does.
+  BW.UPGRADE = { maxLevel: 3, costMul: [0, 1.6, 2.6], time: [0, 30, 55], scale: [1, 1.22, 1.45], capacity: [1, 1.6, 2.4], storage: [1, 1.6, 2.4], impress: [1, 1.5, 2.2], yield: [1, 1.4, 1.9], hp: [1, 1.35, 1.8] };
+  BW.UPGRADABLE = ['center', 'house', 'field', 'altar', 'lodge', 'mine', 'storehouse', 'armory', 'tower'];
+  // Which job a building employs, and how many workers it can use per level.
+  BW.WORKER_JOB = { field: 'farmer', mine: 'miner', lodge: 'forester', altar: 'worshipper', house: 'breeder' };
+  BW.WORKER_SLOTS = { field: [3, 4, 5], mine: [3, 4, 6], lodge: [3, 4, 5], altar: [6, 9, 12], house: [1, 2, 2] };
   BW.BUILDING_HEIGHT = { center: 12, house: 4.5, field: 1, altar: 3.2, armory: 5, tower: 11, wonder: 12, storehouse: 4, road: 0.2, wall: 3.5, gate: 4.5, lodge: 4.5, mine: 4, shrine: 5, statue: 8 };
   BW.BUILD_ORDER = ['house', 'field', 'altar', 'lodge', 'mine', 'storehouse', 'road', 'shrine', 'wall', 'gate', 'armory', 'tower', 'statue', 'wonder', 'center'];
 

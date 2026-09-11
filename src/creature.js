@@ -7,7 +7,7 @@
   const { dist, dist2, clamp } = BW;
 
   const ACTION_ALIGN = { eatTree: 0, eatVillager: -1, eatFood: 0, gatherWood: 0.5, waterField: 0.8, harvest: 0.5, fight: -0.2, wander: 0, sleep: 0, playful: -0.4, castWater: 0.6, castHeal: 1, castFire: -1, castLightning: -0.8 };
-  const ACTION_NAMES = { eatTree: 'eating a tree', eatVillager: 'eating a villager', eatFood: 'eating from the stores', gatherWood: 'gathering wood', waterField: 'watering a field', harvest: 'harvesting a field', fight: 'fighting', wander: 'exploring', sleep: 'sleeping', playful: 'playing with a villager', castWater: 'casting Water', castHeal: 'casting Heal', castFire: 'casting Fireball', castLightning: 'casting Lightning' };
+  const ACTION_NAMES = { guard: 'standing guard', going: 'on its way', follow: 'following your hand', downed: 'knocked out', eatTree: 'eating a tree', eatVillager: 'eating a villager', eatFood: 'eating from the stores', gatherWood: 'gathering wood', waterField: 'watering a field', harvest: 'harvesting a field', fight: 'fighting', wander: 'exploring', sleep: 'sleeping', playful: 'playing with a villager', castWater: 'casting Water', castHeal: 'casting Heal', castFire: 'casting Fireball', castLightning: 'casting Lightning' };
   BW.CREATURE_ACTION_NAMES = ACTION_NAMES;
 
   function speak(c, text) { c.speak = text; c.speakT = 6; }
@@ -126,6 +126,22 @@
       return;
     }
     if (c.cooldown > 0) c.cooldown -= dt;
+    // Direct orders from the hand: attack a target, or guard a spot.
+    if (c.command) {
+      const cmd = c.command;
+      if (cmd.type === 'attack') {
+        const t = G.ents.get(cmd.targetId);
+        if (!t || t.dead || (t.type === 'creature' && t.owner === 0)) { c.command = null; c.state = 'idle'; speak(c, 'Done.'); }
+        else { c.state = 'fight'; c.targetId = t.id; if (goTo(G, c, t.x, t.z, dt, targetRadius(t))) { c.moving = false; attack(G, c, t, dt); } return; }
+      } else if (cmd.type === 'guard') {
+        const hostile = G.nearest(G.people, cmd.x, cmd.z, 32, (p) => p.owner !== 0 && p.job === 'soldier' && !p.inside) || G.nearest(G.creatures, cmd.x, cmd.z, 32, (o) => o.owner !== 0 && !o.downed);
+        if (hostile) { c.state = 'fight'; c.targetId = hostile.id; if (goTo(G, c, hostile.x, hostile.z, dt, targetRadius(hostile))) { c.moving = false; attack(G, c, hostile, dt); } return; }
+        if (dist(c.x, c.z, cmd.x, cmd.z) > 8) { goTo(G, c, cmd.x, cmd.z, dt, 6); c.state = 'going'; return; }
+        c.moving = false; if (c.state !== 'sleep') c.state = 'guard';
+        if (c.hunger > 85 && !c.guardHungry) { c.guardHungry = true; speak(c, "I'm hungry. Feed me or let me roam."); }
+        return;
+      }
+    }
     // Leash overrides
     if (c.leash === 'follow' && hand && hand.hover) {
       const hx = hand.hover.x, hz = hand.hover.z;

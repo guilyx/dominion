@@ -177,7 +177,7 @@
         m.rotation.set(this.smooth.rx, yaw, this.smooth.ry);
         const ud = m.userData;
         const grab = !!this.held || !!this.touch;
-        const point = !!this.mode && this.mode.type !== 'send';
+        const point = !!this.mode && !['send', 'creatureAttack', 'creatureGuard'].includes(this.mode.type);
         const evil = G.god.alignment < -0.4, good = G.god.alignment > 0.4;
         for (let i = 0; i < ud.fingers.length; i++) {
           const f = ud.fingers[i]; const kn = f.getObjectByName('knuckle');
@@ -265,7 +265,9 @@
         if (this.mode) {
           if (this.mode.type === 'build') { if (BW.BUILDINGS[this.mode.kind].line) { this.lineStart = { x: h.x, y: h.y, z: h.z }; return; } return this.tryBuild(); }
           if (this.mode.type === 'miracle') { if (BW.castMiracle(G, this.mode.kind, h.x, h.z, 0)) { G.particles.burst(h.x, h.y + 1, h.z, 25, 5, 0.8, BW.MIRACLES[this.mode.kind].color, 2, 1, 3); if (!input.keys.ShiftLeft) this.setMode(null); } return; }
-          if (this.mode.type === 'send') { const c = G.playerCreature(); if (c) { c.sendGoal = { x: h.x, z: h.z }; c.leash = 'free'; c.state = 'going'; G.say('Creature is on its way.', 'info'); } this.setMode(null); return; }
+          if (this.mode.type === 'send') { const c = G.playerCreature(); if (c) { c.command = null; c.sendGoal = { x: h.x, z: h.z }; c.leash = 'free'; c.state = 'going'; G.say('Creature is on its way.', 'info'); } this.setMode(null); return; }
+          if (this.mode.type === 'creatureAttack') { const c = G.playerCreature(); if (c) { if (ent && ent.owner !== undefined && ent.owner !== 0 && ['building', 'person', 'creature'].includes(ent.type)) { c.command = { type: 'attack', targetId: ent.id }; c.leash = 'free'; c.sendGoal = null; G.say(`Creature will attack the ${ent.type === 'building' ? BW.BUILDINGS[ent.kind].name : ent.type === 'creature' ? ent.name : 'soldier'}.`, 'info'); BW.audio.play('roar'); this.setMode(null); } else G.say('Click an enemy building, soldier or creature.', 'warn'); } return; }
+          if (this.mode.type === 'creatureGuard') { const c = G.playerCreature(); if (c) { c.command = { type: 'guard', x: h.x, z: h.z }; c.leash = 'free'; c.sendGoal = null; G.say('Creature will guard that spot and attack anything hostile nearby.', 'info'); } this.setMode(null); return; }
           if (this.mode.type === 'army') { const pl = G.ents.get(G.selectedPlatoon); if (pl) BW.commandPlatoon(G, pl, h.x, h.z, ent); if (!input.keys.ShiftLeft) this.setMode(null); return; }
         }
         if (this.held) return;
@@ -280,7 +282,9 @@
         }
         if (ent && ent.type === 'building') { G.selectedBuilding = ent.id; if (G.ui) G.ui.showBuilding(ent); }
         this.camera.beginPan(input.mx, input.my);
-      } else if (e.button === 2 || e.button === 1) {
+      } else if (e.button === 1) {
+        this.camera.beginPan(input.mx, input.my); this.midPan = true;
+      } else if (e.button === 2) {
         this.rightDown = { x: input.mx, y: input.my, t: performance.now() };
         this.camera.rotating = true;
       }
@@ -325,7 +329,9 @@
           if (c && !t.stroked && t.moved < 12 && performance.now() - t.t0 < 350) BW.creatureFeedback(G, c, -1);
         }
         if (this.held) this.release();
-      } else if (e.button === 2 || e.button === 1) {
+      } else if (e.button === 1) {
+        this.camera.endPan(); this.midPan = false;
+      } else if (e.button === 2) {
         this.camera.rotating = false;
         const rd = this.rightDown; this.rightDown = null;
         if (rd && Math.hypot(input.mx - rd.x, input.my - rd.y) < 6 && performance.now() - rd.t < 400) {
@@ -339,7 +345,7 @@
     pickUp(ent) {
       const G = this.G;
       if (ent.type === 'tree') { const it = G.addItem('wood', ent.wood, ent.x, ent.z); G.remove(ent); ent = it; }
-      else if (ent.type === 'rock') { const it = G.addItem('ore', ent.ore, ent.x, ent.z); G.remove(ent); ent = it; }
+      else if (ent.type === 'rock') { const it = G.addItem(ent.kind || 'stone', ent.ore, ent.x, ent.z); G.remove(ent); ent = it; }
       ent.held = true; ent.thrown = null;
       if (ent.type === 'person') { ent.state = 'idle'; ent.fear = 0; if (ent.inside) { const h = G.ents.get(ent.workId); if (h) h.garrison = Math.max(0, h.garrison - 1); ent.inside = false; } }
       this.held = ent;
@@ -367,8 +373,9 @@
       const town = G.playerTown();
       // Feed the creature
       if (target && target.type === 'creature' && target.owner === 0) { if (BW.feedCreature(G, target, e)) { BW.creatureObserve(G, 'feed', e.x, e.z); return; } }
+      const hoverB = target && target.type === 'building' ? target : null;
       if (e.type === 'item') {
-        const b = G.buildingAt(h.x, h.z, 2);
+        const b = hoverB || G.buildingAt(h.x, h.z, 2);
         if (b && b.kind === 'center') {
           const t = G.ents.get(b.town);
           if (t) { G.deposit(t, e.kind, e.amount); G.remove(e); BW.audio.play('drop'); BW.creatureObserve(G, e.kind === 'wood' ? 'wood' : 'food', b.x, b.z); if (t.owner !== 0) { t.loyalty -= 4; BW.shiftAlignment(G, 0.01); G.say(`A gift for ${t.name}. They are impressed.`, 'good'); } return; }
@@ -379,7 +386,7 @@
       if (e.type === 'person') {
         e.y = G.groundY(e.x, e.z);
         if (G.terrain.heightAt(e.x, e.z) < 0.5) { BW.die(G, e, 'drowned'); BW.shiftAlignment(G, -0.02); return; }
-        const b = G.buildingAt(h.x, h.z, 2.5);
+        const b = hoverB || G.buildingAt(h.x, h.z, 2.5);
         let pt = G.ents.get(e.town);
         // Moving your own villagers between your towns.
         if (e.owner === 0 && b && b.owner === 0 && b.town !== e.town) { const nt = G.ents.get(b.town); if (nt) { BW.migrate(G, e, nt); pt = nt; G.say(`${e.name} moves to ${nt.name}.`, 'info'); } }
@@ -389,13 +396,13 @@
         if (e.owner !== 0 && b && b.kind === 'center' && b.owner === 0 && town) { const from = BW.migrate(G, e, town); if (from) from.loyalty -= 1; G.say('The villager joins your town.', 'good'); BW.shiftAlignment(G, -0.005); BW.audio.play('drop'); return; }
         if (e.owner === 0 && pt) {
           if (b && b.town === e.town) {
-            if (!b.built) { e.job = 'builder'; e.workId = b.id; }
+            if (!b.built || b.upgrading) { e.job = 'builder'; e.workId = b.id; }
             else if (b.kind === 'field') { e.job = 'farmer'; e.workId = b.id; }
             else if (b.kind === 'house') { e.job = 'breeder'; e.workId = b.id; }
             else if (b.kind === 'altar') { e.job = 'worshipper'; e.workId = b.id; }
             else if (b.kind === 'armory') { this.recruit(e, b); }
             else if (b.kind === 'mine') { e.job = 'miner'; e.workId = b.id; }
-            else if (b.kind === 'lodge') { e.job = 'forester'; e.workId = 0; }
+            else if (b.kind === 'lodge') { e.job = 'forester'; e.workId = 0; e.baseId = b.id; }
             else if (b.kind === 'center') { if (e.carry) { G.deposit(pt, e.carry.kind, e.carry.amount); e.carry = null; } e.job = 'idle'; e.workId = 0; }
             if (e.platoon && e.job !== 'soldier') { const pl = G.ents.get(e.platoon); if (pl) { const i = pl.members.indexOf(e.id); if (i >= 0) pl.members.splice(i, 1); if (!pl.members.length) G.remove(pl); } e.platoon = 0; e.maxHealth = 30; }
             G.say(`${e.name} is now a ${BW.JOB_NAMES[e.job]}.`, 'info');
