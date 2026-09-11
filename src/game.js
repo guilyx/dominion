@@ -73,13 +73,15 @@
         if (this.G.terrain) { this.gfx.world.remove(this.G.terrain.group); this.G.terrain.dispose(); }
         if (this.G.inflRing) this.gfx.world.remove(this.G.inflRing);
         if (this.G.grass) this.gfx.world.remove(this.G.grass.mesh);
-        if (this.hand) { this.gfx.scene.remove(this.hand.mesh); this.gfx.world.remove(this.hand.ring); this.gfx.world.remove(this.hand.selRing); if (this.hand.ghost) this.gfx.world.remove(this.hand.ghost); }
+        if (this.hand) { this.gfx.scene.remove(this.hand.mesh); for (const o of [this.hand.ring, this.hand.selRing, this.hand.hoverRing, this.hand.reticle, this.hand.hexes.group, this.hand.lineMesh, this.hand.ghost]) if (o) this.gfx.world.remove(o); }
       }
     }
 
     buildLand(land, index) {
       this.teardown();
-      const sites = [{ x: land.player.x, z: land.player.z, r: 48 }].concat(land.enemies.map((e) => ({ x: e.x, z: e.z, r: 44 })));
+      const snapSite = (p) => { const s = BW.hex.snap(p.x, p.z); return { x: s.x, z: s.z }; };
+      const ps = snapSite(land.player); const es = land.enemies.map(snapSite);
+      const sites = [{ x: ps.x, z: ps.z, r: 62 }].concat(es.map((e) => ({ x: e.x, z: e.z, r: 56 })));
       const terrain = new BW.Terrain(land.seed, land.size, sites);
       const G = new BW.World(this.gfx);
       BW.G = G; this.G = G;
@@ -97,21 +99,21 @@
       this.camera = new BW.GodCamera(this.gfx, terrain);
       G.camera = this.camera;
       this.hand = new BW.Hand(G, this.camera); G.hand = this.hand; G.ui = this.ui;
-      this.camera.lookAt(land.player.x, land.player.z);
-      this.camera.yaw = Math.atan2(land.player.x, land.player.z) + Math.PI; // look inland
+      this.camera.lookAt(ps.x, ps.z);
+      this.camera.yaw = Math.atan2(ps.x, ps.z) + Math.PI; // look inland
       // Towns
       const rng = G.rng;
-      const pt = G.addTown({ name: 'Your town', owner: 0, color: 0, x: land.player.x, z: land.player.z, food: 260, wood: 220, ore: 40 });
+      const pt = G.addTown({ name: 'Your town', owner: 0, color: 0, x: ps.x, z: ps.z, food: 260, wood: 220, ore: 40 });
       this.setupTown(G, pt, land.player.pop, true, rng);
       land.enemies.forEach((e, i) => {
-        const t = G.addTown({ name: e.name, owner: i + 1, color: e.color, x: e.x, z: e.z, food: 300, wood: 260, ore: 80, ai: { aggression: e.aggression, godMiracles: !!e.godMiracles, timers: {} } });
+        const t = G.addTown({ name: e.name, owner: i + 1, color: e.color, x: es[i].x, z: es[i].z, food: 300, wood: 260, ore: 80, ai: { aggression: e.aggression, godMiracles: !!e.godMiracles, timers: {} } });
         this.setupTown(G, t, e.pop, false, rng);
-        if (e.creature) { const c = G.addCreature(i + 1, e.creature.species, e.x + 14, e.z + 10, e.creature.size); c.name = BW.SPECIES[e.creature.species].name; }
+        if (e.creature) { const c = G.addCreature(i + 1, e.creature.species, es[i].x + 14, es[i].z + 10, e.creature.size); c.name = BW.SPECIES[e.creature.species].name; }
       });
       // Trees & rocks
       this.scatter(G, land, rng);
       // Player creature
-      const c = G.addCreature(0, P.species, land.player.x + 12, land.player.z + 10, 1);
+      const c = G.addCreature(0, P.species, ps.x + 12, ps.z + 10, 1);
       if (P.creature) { Object.assign(c.learned, P.creature.learned); c.growth = P.creature.growth; c.alignment = P.creature.alignment; c.size = clamp(1 + c.growth, 1, 3.4); c.maxHealth = BW.SPECIES[c.species].hp * c.size; c.health = c.maxHealth; G._buildCreatureMesh(c); }
       c.leash = 'free';
       // Influence ring
@@ -137,9 +139,9 @@
       if (isPlayer) for (let i = 1; i <= 3; i++) { const x = town.x, z = town.z + 6 + i * 4; if (!BW.footprintOk(G, 'road', x, z, town, false)) BW.placeBuilding(G, 'road', town, x, z, 0, true); }
       const put = (kind, rmin, rmax) => { const s = BW.findSpot(G, kind, town, town.x, town.z, rmin, rmax, rng, 40); if (s) BW.placeBuilding(G, kind, town, s.x, s.z, s.rot, true); };
       const houses = Math.ceil(pop / 5) + 1;
-      for (let i = 0; i < houses; i++) put('house', 9, 20);
-      for (let i = 0; i < Math.max(2, Math.ceil(pop / 6)); i++) put('field', 12, 26);
-      put('altar', 10, 18);
+      for (let i = 0; i < houses; i++) put('house', 9, 24);
+      for (let i = 0; i < Math.max(2, Math.ceil(pop / 6)); i++) put('field', 14, 32);
+      put('altar', 10, 22);
       if (!isPlayer) { for (let i = 0; i < 3; i++) { const a = rng.next() * 6.28, r = 24 + rng.next() * 10; const x = town.x + Math.sin(a) * r, z = town.z + Math.cos(a) * r; if (G.terrain.isLand(x, z) && !G.buildingAt(x, z, 2)) G.addRock(x, z, 1 + rng.next()); } }
       for (let i = 0; i < pop; i++) { const a = rng.next() * 6.28, r = 6 + rng.next() * 10; G.addPerson(town, town.x + Math.sin(a) * r, town.z + Math.cos(a) * r, 'idle'); }
     }

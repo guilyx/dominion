@@ -102,7 +102,22 @@
     toggleHelp() { $('help').classList.toggle('hidden'); }
     onModeChanged(m) {
       const canvas = $('game'); canvas.classList.toggle('mode', !!m);
-      if (this.tab) this.refreshTab();
+      const bar = $('modebar');
+      if (m) {
+        // Tuck the panel away so the ground is visible; remember which tab to restore.
+        if (this.tab) { this.restoreTab = this.tab; this.subpanel.classList.remove('open'); }
+        let text = '';
+        if (m.type === 'build') { const d = BW.BUILDINGS[m.kind]; text = `<b>Placing ${d.name}</b> · ${d.line ? 'drag a line' : 'click a tile'} · R rotate · Shift keep placing · Esc / right-click cancel`; }
+        else if (m.type === 'miracle') { const d = BW.MIRACLES[m.kind]; text = `<b>Casting ${d.name}</b> (${d.cost} prayer) · click inside your influence · Shift keep casting · Esc cancel`; }
+        else if (m.type === 'army') text = '<b>Commanding platoon</b> · click ground to move, click an enemy to attack · Esc cancel';
+        else if (m.type === 'send') text = '<b>Sending creature</b> · click where it should go · Esc cancel';
+        bar.innerHTML = text; bar.classList.add('open');
+      } else {
+        bar.classList.remove('open');
+        if (this.restoreTab && this.tab === this.restoreTab) { this.subpanel.classList.add('open'); this.renderTab(); }
+        this.restoreTab = null;
+      }
+      if (this.tab && !m) this.refreshTab();
     }
     toggleTab(name) {
       if (this.tab === name) { this.closeTab(); return; }
@@ -112,7 +127,7 @@
       this.renderTab();
       BW.audio.play('ui');
     }
-    closeTab() { this.tab = null; this.subpanel.classList.remove('open'); $('tabs').querySelectorAll('button').forEach((b) => b.classList.remove('active')); }
+    closeTab() { this.tab = null; this.restoreTab = null; this.subpanel.classList.remove('open'); $('tabs').querySelectorAll('button').forEach((b) => b.classList.remove('active')); }
 
     renderTab() {
       const G = this.G; if (!G) return;

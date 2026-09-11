@@ -21,6 +21,9 @@
       this.ring = BW.groundRing(10, 0xffffff); this.ring.visible = false; G.gfx.world.add(this.ring);
       this.selRing = BW.groundRing(4, 0xffff66); this.selRing.visible = false; G.gfx.world.add(this.selRing);
       this.hoverRing = BW.groundRing(1.5, 0xffffff, 40); this.hoverRing.visible = false; G.gfx.world.add(this.hoverRing);
+      this.reticle = BW.makeReticle(); G.gfx.world.add(this.reticle);
+      this.hexes = new BW.HexOverlay(); G.gfx.world.add(this.hexes.group);
+      this.snap = null;
       this.smooth = { rx: 0, ry: 0 };
       this.downPos = null; this.downT = 0; this.rightDown = null;
       this.lineStart = null;
@@ -99,6 +102,7 @@
     setMode(m) {
       this.mode = m;
       if (this.ghost) { this.G.gfx.world.remove(this.ghost); this.ghost = null; }
+      this.snap = null; if (this.hexes) this.hexes.hide();
       if (m && m.type === 'build') {
         const fake = { id: -1, kind: m.kind, owner: 0 };
         const g = BW.buildingMesh(fake, 0, this.G.god.alignment);
@@ -190,7 +194,16 @@
         ud.mat.emissive.set(evil ? 0x3a0000 : good ? 0x4a3a18 : 0x221100);
         ud.sleeveMat.color.set(evil ? 0xff3020 : good ? 0xfff6d0 : 0xfff1c0);
         ud.sleeveMat.opacity = (evil ? 0.09 : good ? 0.09 : 0.055) + Math.sin(time * 3) * 0.01;
-        m.scale.setScalar(1.5 + this.camera.dist / 95);
+        m.scale.setScalar(0.85 + this.camera.dist / 190);
+        // Aimer on the ground under the hand.
+        const rt = this.reticle.userData; const aim = this.snap || this.hover;
+        this.reticle.visible = true;
+        BW.updateRing(rt.ring, aim.x, aim.z, this.mode ? 1.4 : 0.8, G.terrain, 0.2);
+        rt.ring.material.color.set(this.mode && this.mode.type === 'miracle' ? BW.MIRACLES[this.mode.kind].color : evil ? 0xff8a70 : 0xfff4d0);
+        rt.dot.position.set(aim.x, Math.max(G.terrain.heightAt(aim.x, aim.z), 0) + 0.25, aim.z);
+        rt.dot.material.color.copy(rt.ring.material.color);
+        const tp = rt.thread.geometry.attributes.position; tp.setXYZ(0, m.position.x, m.position.y - 0.3 * m.scale.x, m.position.z); tp.setXYZ(1, rt.dot.position.x, rt.dot.position.y, rt.dot.position.z); tp.needsUpdate = true;
+        rt.thread.material.color.copy(rt.ring.material.color);
         ud.sleeve.rotation.z = Math.sin(time * 0.9) * 0.05;
         const casting = this.mode && this.mode.type === 'miracle';
         ud.orb.visible = casting; ud.ring.visible = casting;
@@ -202,16 +215,21 @@
         if (sp > 18 && BW.rand() < dt * 30) G.particles.spawn(m.position.x + (BW.rand() - 0.5), m.position.y - 0.5, m.position.z + (BW.rand() - 0.5), 0, 0.5, 0, 0.5, evil ? 0xff4422 : 0xffe9a0, 1.4);
         if (this.held) { const e = this.held; e.x = this.hover.x; e.z = this.hover.z; e.y = this.hover.y + 1.6; if (e.type === 'person') e.dir += dt * 3; }
         if (this.ghost) {
-          this.ghost.position.set(this.hover.x, this.hover.y, this.hover.z); this.ghost.rotation.y = this.ghostRot;
+          const def = BW.BUILDINGS[this.mode.kind];
+          const tiled = !def.line && this.mode.kind !== 'gate';
+          if (tiled) { const s = BW.hex.snap(this.hover.x, this.hover.z); this.snap = { x: s.x, z: s.z, q: s.q, r: s.r, y: G.groundY(s.x, s.z) }; } else this.snap = null;
+          const gp = this.snap || this.hover;
+          this.ghost.position.set(gp.x, gp.y, gp.z); this.ghost.rotation.y = this.ghostRot;
           const t = G.playerTown();
-          const err = BW.footprintOk(G, this.mode.kind, this.hover.x, this.hover.z, t);
+          const err = BW.footprintOk(G, this.mode.kind, gp.x, gp.z, t);
           const can = t && G.canAfford(t, BW.BUILDINGS[this.mode.kind].cost);
           const col = err || !can ? 0xff5555 : 0x66ff66;
           this.ghost.traverse((o) => { if (o.isMesh && o.name !== 'scaffold') o.material.color.set(col); });
           this.ghostErr = err || (!can ? 'Not enough resources' : null);
-        }
+          if (tiled) this.hexes.update(G.terrain, gp.x, gp.z, 5, (q, r) => BW.hexOccupied(G, q, r), this.snap, !this.ghostErr); else this.hexes.hide();
+        } else { this.hexes.hide(); this.snap = null; }
         if (this.ring.visible) BW.updateRing(this.ring, this.hover.x, this.hover.z, BW.MIRACLES[this.mode.kind].radius, G.terrain);
-      } else m.visible = false;
+      } else { m.visible = false; this.reticle.visible = false; this.hexes.hide(); }
       // Hover highlight ring
       const he = this.hoverEnt;
       if (he && !this.held && !this.mode && (this.pickable(he) || he.type === 'creature' || he.type === 'building')) {
@@ -383,7 +401,7 @@
     }
 
     tryBuild() {
-      const G = this.G, h = this.hover, kind = this.mode.kind;
+      const G = this.G, h = this.snap || this.hover, kind = this.mode.kind;
       const town = G.playerTown(); if (!town) return;
       const err = BW.footprintOk(G, kind, h.x, h.z, town);
       if (err) { G.say(err, 'warn'); return; }

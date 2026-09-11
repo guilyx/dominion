@@ -568,6 +568,67 @@
     }
   }
 
+  // ---------------------------------------------------------------- Hex overlay
+  // Grid lines draped over the terrain around the cursor while placing.
+  class HexOverlay {
+    constructor() {
+      const maxHex = 127, segs = 6 * 3;
+      this.geo = new THREE.BufferGeometry();
+      this.pos = new Float32Array(maxHex * segs * 2 * 3);
+      this.col = new Float32Array(maxHex * segs * 2 * 3);
+      this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+      this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+      this.lines = new THREE.LineSegments(this.geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }));
+      this.lines.frustumCulled = false; this.lines.visible = false;
+      this.hover = groundRing(BW.hex.R, 0x66ff66, 36); this.hover.visible = false;
+      this.group = new THREE.Group(); this.group.add(this.lines, this.hover);
+      this.lastKey = null;
+    }
+    // occupied(q,r) -> true when a building already sits in that hex.
+    update(terrain, cx, cz, radius, occupied, hoverHex, valid) {
+      const c = BW.hex.toHex(cx, cz);
+      const key = c.q * 100003 + c.r + (valid ? 0.5 : 0) + radius * 1e9;
+      if (key !== this.lastKey || this.version !== terrain.colorVersion) {
+        this.lastKey = key; this.version = terrain.colorVersion;
+        let n = 0; const P = this.pos, C = this.col;
+        for (let dq = -radius; dq <= radius; dq++) for (let dr = -radius; dr <= radius; dr++) {
+          if (Math.abs(dq + dr) > radius) continue;
+          const q = c.q + dq, r = c.r + dr; const ctr = BW.hex.center(q, r);
+          if (!terrain.isLand(ctr.x, ctr.z)) continue;
+          const occ = occupied(q, r);
+          const col = occ ? [0.9, 0.35, 0.3] : [1, 0.95, 0.8];
+          const cs = BW.hex.corners(ctr.x, ctr.z);
+          for (let i = 0; i < 6; i++) {
+            const a = cs[i], b = cs[(i + 1) % 6];
+            for (let s = 0; s < 3; s++) {
+              const t0 = s / 3, t1 = (s + 1) / 3;
+              const x0 = a.x + (b.x - a.x) * t0, z0 = a.z + (b.z - a.z) * t0, x1 = a.x + (b.x - a.x) * t1, z1 = a.z + (b.z - a.z) * t1;
+              P[n * 3] = x0; P[n * 3 + 1] = Math.max(terrain.heightAt(x0, z0), 0) + 0.3; P[n * 3 + 2] = z0; C[n * 3] = col[0]; C[n * 3 + 1] = col[1]; C[n * 3 + 2] = col[2]; n++;
+              P[n * 3] = x1; P[n * 3 + 1] = Math.max(terrain.heightAt(x1, z1), 0) + 0.3; P[n * 3 + 2] = z1; C[n * 3] = col[0]; C[n * 3 + 1] = col[1]; C[n * 3 + 2] = col[2]; n++;
+            }
+          }
+        }
+        this.geo.setDrawRange(0, n); this.geo.attributes.position.needsUpdate = true; this.geo.attributes.color.needsUpdate = true;
+      }
+      this.lines.visible = true;
+      if (hoverHex) { const hc = BW.hex.center(hoverHex.q, hoverHex.r); updateRing(this.hover, hc.x, hc.z, BW.hex.R * 0.97, terrain, 0.45); this.hover.material.color.set(valid ? 0x66ff66 : 0xff5555); this.hover.visible = true; }
+      else this.hover.visible = false;
+    }
+    hide() { this.lines.visible = false; this.hover.visible = false; }
+  }
+
+  // The aimer: a small ring and dot on the ground under the hand, plus a thin
+  // thread from the palm down to that point.
+  function makeReticle() {
+    const g = new THREE.Group();
+    const ring = groundRing(0.9, 0xffffff, 28); ring.material.opacity = 0.9;
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const thread = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
+    thread.frustumCulled = false;
+    g.add(ring, dot, thread); g.userData = { ring, dot, thread };
+    return g;
+  }
+
   // ---------------------------------------------------------------- Icons
   // Render any mesh to a small image, for menus and build cards.
   let iconRenderer = null;
@@ -682,5 +743,5 @@
     line.userData.radius = radius;
   }
 
-  Object.assign(BW, { Gfx, Crowd, makePeopleCrowd, makeIconCrowd, makeTreeCrowd, makeBroadleafCrowd, makeRockCrowd, makeItemCrowd, buildingMesh, creatureMesh, handMesh, Particles, groundRing, updateRing, box, mat, Sky, makeWater, Grass, renderIcon, windowMat });
+  Object.assign(BW, { Gfx, Crowd, makePeopleCrowd, makeIconCrowd, makeTreeCrowd, makeBroadleafCrowd, makeRockCrowd, makeItemCrowd, buildingMesh, creatureMesh, handMesh, Particles, groundRing, updateRing, box, mat, Sky, makeWater, Grass, renderIcon, windowMat, HexOverlay, makeReticle });
 })(window.BW);
