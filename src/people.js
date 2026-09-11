@@ -193,7 +193,7 @@
     switch (p.job) {
       case 'farmer': return doFarmer(G, p, town, center, dt);
       case 'forester': return doGather(G, p, town, center, dt, 'tree');
-      case 'miner': return doGather(G, p, town, center, dt, 'rock');
+      case 'miner': { const m = G.ents.get(p.workId); if (m && m.type === 'building' && m.kind === 'mine' && m.built && !m.dead) return doMine(G, p, town, center, dt, m); const mine = G.nearest(G.buildings, p.x, p.z, 400, (x) => x.town === town.id && x.kind === 'mine' && x.built && G.people.filter((q) => q.workId === x.id && q.job === 'miner').length < 3); if (mine) { p.workId = mine.id; return; } return doGather(G, p, town, center, dt, 'rock'); }
       case 'builder': return doBuilder(G, p, town, center, dt);
       case 'breeder': return doBreeder(G, p, town, center, dt);
       case 'worshipper': return doWorship(G, p, town, center, dt);
@@ -245,14 +245,14 @@
     const ok = (e) => e && !e.dead && (kind === 'tree' ? (e.wood > 0 && e.fire <= 0 && !e.burnt) : e.ore > 0);
     if (!ok(t) || t.type !== kind) {
       if (!center) { p.job = 'idle'; return; }
-      t = G.nearest(list, center.x, center.z, 110, ok);
-      if (!t) { p.job = 'idle'; if (town.owner === 0 && (!G.lastNoRes || G.time - G.lastNoRes > 30)) { G.lastNoRes = G.time; G.say(kind === 'tree' ? 'No trees left near your town. Foresters have gone idle.' : 'No rocks left near your town. Miners have gone idle.', 'warn'); } return; }
+      t = G.nearest(list, center.x, center.z, 110, kind === 'tree' ? (e) => ok(e) && e.size >= 0.6 : ok);
+      if (!t) { p.job = 'idle'; if (town.owner === 0 && (!G.lastNoRes || G.time - G.lastNoRes > 30)) { G.lastNoRes = G.time; G.say(kind === 'tree' ? "No trees left near your town. Build a Woodcutter's lodge so the forest regrows." : 'No rocks left near your town. Build a Mine next to a vein.', 'warn'); } return; }
       p.workId = t.id;
     }
-    p.state = 'walk';
-    if (moveToward(G, p, t.x, t.z, dt, p.speed, 1.6)) {
-      if (p.state !== 'work') { p.state = 'work'; p.workTimer = 0; }
-      p.workTimer += dt * workRate(G, p);
+    if (!moveToward(G, p, t.x, t.z, dt, p.speed, 1.6)) { p.state = 'walk'; p.workTimer = 0; }
+    else {
+      p.state = 'work';
+      p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
       if (p.workTimer >= (kind === 'tree' ? 4 : 5)) {
         p.workTimer = 0;
         if (kind === 'tree') {
@@ -260,12 +260,23 @@
           G.particles.burst(t.x, t.y + 1, t.z, 6, 2, 0.5, 0xa07040, 1, 3);
           if (t.wood <= 0) G.remove(t);
         } else {
-          const take = Math.min(8, t.ore); t.ore -= take; p.carry = { kind: 'ore', amount: take };
+          const take = Math.min(8, t.ore); t.ore -= take; p.carry = { kind: t.kind || 'stone', amount: take };
           G.particles.burst(t.x, t.y + 1, t.z, 6, 2, 0.5, 0xbbbbcc, 1, 3);
           if (t.ore <= 0) G.remove(t);
         }
         p.state = 'idle';
       }
+    }
+  }
+
+  // Miners at a mine dig its vein forever.
+  function doMine(G, p, town, center, dt, mine) {
+    if (p.carry) return goDeposit(G, p, center, dt);
+    if (!moveToward(G, p, mine.x + Math.sin(p.id) * 3.2, mine.z + Math.cos(p.id) * 3.2, dt, p.speed, 1.0)) { p.state = 'walk'; p.workTimer = 0; }
+    else {
+      p.state = 'work';
+      p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
+      if (p.workTimer >= 5) { p.workTimer = 0; p.carry = { kind: mine.vein || 'stone', amount: mine.vein === 'gold' ? 4 : mine.vein === 'iron' ? 6 : 8 }; G.particles.burst(mine.x, mine.y + 2, mine.z, 6, 2, 0.5, BW.RES_COLORS[mine.vein] || 0xbbbbcc, 1, 3); p.state = 'idle'; }
     }
   }
 
@@ -331,7 +342,7 @@
     n.food = clamp(1 - p.hunger / 100, 0, 1);
     n.home = town.cap ? clamp(town.cap / Math.max(1, town.pop || 1), 0, 1) : 0;
     n.worship = town.hasAltar ? 1 : 0.35;
-    n.safety = clamp(1 - (town.fearRecent || 0) / 60, 0, 1) * (p.sick > 0 ? 0.5 : 1);
+    n.safety = clamp(1 - (town.fearRecent || 0) / 60 + (town.guards >= 3 ? 0.35 : 0), 0, 1) * (p.sick > 0 ? 0.5 : 1);
     n.rest = p.slept ? 1 : 0.5;
     p.happy = n.food * 0.35 + n.home * 0.2 + n.worship * 0.15 + n.safety * 0.2 + n.rest * 0.1;
     if (p.trait === 'pious' && !town.hasAltar) p.happy -= 0.1;

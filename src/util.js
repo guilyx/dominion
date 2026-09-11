@@ -182,7 +182,7 @@ window.BW = window.BW || {};
       return null;
     }
     // A* from world (ax,az) to (bx,bz). Returns array of {x,z} waypoints (excluding start) or null.
-    find(ax, az, bx, bz, owner = -1, maxNodes = 6000) {
+    find(ax, az, bx, bz, owner = -1, maxNodes = 40000) {
       let [sx, sz] = this.toCell(ax, az); let [gx, gz] = this.toCell(bx, bz);
       const s = this.nearestOpen(sx, sz, owner); const g = this.nearestOpen(gx, gz, owner);
       if (!s || !g) return null;

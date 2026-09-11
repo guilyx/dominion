@@ -16,7 +16,7 @@
       this.time = 0;                 // seconds of game time
       this.dayLength = 300;          // seconds per day
       this.tod = 0.3;                // time of day 0..1, start morning
-      this.god = { prayer: 300, maxPrayer: 1000, alignment: 0, tribute: 0, unlocks: {}, miracleImpress: 0, influence: 45, shields: [], stats: { casts: 0, kills: 0, thrown: 0 } };
+      this.god = { prayer: 300, maxPrayer: 1000, alignment: 0, tribute: 0, unlocks: {}, miracleImpress: 0, influence: 45, shields: [], stats: { casts: 0, kills: 0, thrown: 0 }, renown: 0, renownRate: 0 };
       this.effects = [];             // timed world effects (rain zones, shields, fires)
       this.msgs = [];
       this.peopleCrowd = BW.makePeopleCrowd(1500);
@@ -36,6 +36,7 @@
       this.weather = { kind: 'clear', t: 60, intensity: 0 };
       this.season = 'summer';
       this.director = { tension: 0, nextEvent: 240, last: '', log: [] };
+      this.history = []; this.historyT = 0;
       this.frame = 0;
       this.names = { used: 0 };
     }
@@ -63,7 +64,7 @@
     groundY(x, z) { return Math.max(this.terrain.heightAt(x, z), 0); }
 
     addTown(o) {
-      const t = Object.assign({ id: uid(), type: 'town', owner: 0, name: 'Town', color: 0, x: 0, z: 0, centerId: 0, food: 200, wood: 150, ore: 30, loyalty: 100, impress: 0, autoJobs: true, ai: null, timers: {}, alive: true }, o);
+      const t = Object.assign({ id: uid(), type: 'town', owner: 0, name: 'Town', color: 0, x: 0, z: 0, centerId: 0, food: 200, wood: 150, stone: 40, iron: 10, gold: 0, loyalty: 100, impress: 0, autoJobs: true, ai: null, timers: {}, alive: true }, o);
       this.towns.push(t); this.ents.set(t.id, t); return t;
     }
     addPerson(town, x, z, job = 'idle', age) {
@@ -77,8 +78,8 @@
       this.treesDirty = true;
       return this._register(t, this.trees);
     }
-    addRock(x, z, size = 1) {
-      const r = { type: 'rock', id: uid(), x, z, y: this.groundY(x, z), size, ore: Math.round(40 * size) };
+    addRock(x, z, size = 1, kind = 'stone') {
+      const r = { type: 'rock', id: uid(), x, z, y: this.groundY(x, z), size, kind, ore: Math.round(40 * size) };
       return this._register(r, this.rocks);
     }
     addItem(kind, amount, x, z) {
@@ -218,7 +219,7 @@
       const P = BW.PEOPLE_PARTS;
       const pc = this.peopleCrowd; pc.begin();
       const ic = this.iconCrowd; ic.begin();
-      const carryCol = { food: 0xd9b24c, wood: 0x8a5a2a, ore: 0x888899 };
+      const carryCol = BW.RES_COLORS;
       const TUNIC = { idle: 0, farmer: 0x6fa84a, forester: 0x8a5a2a, miner: 0x6e6e80, builder: 0xd08a2a, breeder: 0xd07aa0, worshipper: 0xf4f0e6, soldier: 0x5a5a6a };
       const TOOL = { farmer: 0x9a7a4a, forester: 0x7a5a3a, miner: 0x5a5a66, builder: 0x8a5a2a, soldier: 0x9a9aa8 };
       const SKINS = [0xf1c9a5, 0xe0ac7e, 0xc68642, 0x8d5524, 0x6b4423];
@@ -293,10 +294,10 @@
         this.treesDirty = false;
       }
       const rc = this.rockCrowd; rc.begin();
-      for (const r of this.rocks) rc.add(r.x, r.y, r.z, r.id, 0.6 + r.size * 0.6, 0x8a8a8a);
+      for (const r of this.rocks) rc.add(r.x, r.y, r.z, r.id, 0.6 + r.size * 0.6, BW.VEIN_COLORS[r.kind] || 0x8a8a8a);
       rc.end();
       const ic2 = this.itemCrowd; ic2.begin();
-      for (const it of this.items) ic2.add(it.x, it.y, it.z, it.id, 0.6 + Math.min(it.amount, 200) / 250, carryCol[it.kind]);
+      for (const it of this.items) ic2.add(it.x, it.y, it.z, it.id, 0.6 + Math.min(it.amount, 200) / 250, carryCol[it.kind] || 0xffffff);
       ic2.end();
     }
 
@@ -306,7 +307,7 @@
       const data = {
         version: 1, landIndex: this.landIndex, seed: this.seed, time: this.time, tod: this.tod, god: this.god, towns: this.towns,
         people: this.people, treesC: this.trees.map((t) => [t.id, +t.x.toFixed(1), +t.z.toFixed(1), +t.size.toFixed(2), t.wood, +t.fire.toFixed(2), t.burnt, +t.tint.toFixed(2), t.kind === undefined ? 1 : t.kind]), rocks: this.rocks, items: this.items, buildings: this.buildings, creatures: this.creatures, platoons: this.platoons, effects: this.effects, nextId: BW.uid(),
-        camera: this.cameraState ? this.cameraState() : null, rng: this.rng.s, weather: this.weather, season: this.season, director: this.director,
+        camera: this.cameraState ? this.cameraState() : null, rng: this.rng.s, weather: this.weather, season: this.season, director: this.director, history: this.history,
       };
       return JSON.stringify(data, strip);
     }
@@ -319,6 +320,13 @@
       this.trees = data.treesC ? data.treesC.map((a) => ({ type: 'tree', id: a[0], x: a[1], z: a[2], y: this.groundY(a[1], a[2]), size: a[3], wood: a[4], hp: 40 * a[3], fire: a[5], burnt: a[6], tint: a[7], kind: a[8] })) : (data.trees || []);
       if (data.rng !== undefined) this.rng.s = data.rng;
       if (data.weather) this.weather = data.weather; if (data.season) this.season = data.season; if (data.director) this.director = data.director;
+      this.history = data.history || [];
+      // Older saves: ore became stone.
+      for (const t of this.towns) { if (t.ore !== undefined) { t.stone = (t.stone || 0) + t.ore; delete t.ore; } for (const k of BW.RESOURCES) if (t[k] === undefined) t[k] = 0; }
+      for (const r of this.rocks) if (!r.kind) r.kind = 'stone';
+      for (const it of this.items) if (it.kind === 'ore') it.kind = 'stone';
+      for (const p of this.people) if (p.carry && p.carry.kind === 'ore') p.carry.kind = 'stone';
+      if (this.god.renown === undefined) { this.god.renown = 0; this.god.renownRate = 0; }
       this.navDirty = true;
       this.buildings = data.buildings; this.creatures = data.creatures; this.platoons = data.platoons;
       for (const L of [this.towns, this.people, this.trees, this.rocks, this.items, this.buildings, this.creatures, this.platoons]) for (const e of L) { e.dead = false; this.ents.set(e.id, e); }
