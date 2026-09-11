@@ -301,6 +301,8 @@
         this.ui.initMinimap();
         document.getElementById('landname').textContent = land.name;
         document.getElementById('loading').classList.remove('show');
+        document.getElementById('ui').classList.remove('photo');
+        this.ui.closeTab(); this.ui.hideBuilding();
         this.running = true; this.paused = false;
         this.G.say('Game loaded.', 'good');
       }, 50);
