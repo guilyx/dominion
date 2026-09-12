@@ -28,6 +28,10 @@
       ['miner', G.buildings.filter((b) => b.town === town.id && b.kind === 'mine' && b.built).length * 2 + (town.stone < 150 && G.nearest(G.rocks, town.x, town.z, 110) ? 1 : 0)],
       ['worshipper', altars ? 2 + Math.floor(pop / 7) : 0],
       ['breeder', houses ? 1 + Math.floor(pop / 12) : 0],
+      ['scholar', G.buildings.filter((b) => b.town === town.id && b.kind === 'library' && b.built).length * 2],
+      ['fisher', G.buildings.filter((b) => b.town === town.id && b.kind === 'harbour' && b.built).length * 2],
+      ['merchant', G.buildings.filter((b) => b.town === town.id && b.kind === 'market' && b.built).length],
+      ['healer', G.buildings.filter((b) => b.town === town.id && b.kind === 'herbalist' && b.built).length],
     ];
     for (const [job, want] of wants) {
       while (counts[job] < want && idle.length) { const p = idle.pop(); p.job = job; p.workId = 0; counts[job]++; }
@@ -125,6 +129,12 @@
       else if (pop > 22 && !count('statue') && town.stone >= 140 && town.gold >= 30) kind = 'statue';
       else if (pop > 28 && !count('wonder') && town.stone >= 320 && town.gold >= 120) kind = 'wonder';
       else if (!count('storehouse') && (town.wood > town.cap_ * 0.85 || town.food > town.cap_ * 0.85) && town.wood >= 120) kind = 'storehouse';
+      else if (!count('library') && pop >= 12 && town.wood >= 90 && town.stone >= 40) kind = 'library';
+      else if (town.era >= 1 && !count('market') && pop >= 16 && town.wood >= 110 && town.stone >= 50) kind = 'market';
+      else if (town.era >= 1 && !count('granary') && count('field') >= 3 && town.wood >= 80 && town.stone >= 30) kind = 'granary';
+      else if (town.era >= 1 && !count('harbour') && pop >= 14 && town.wood >= 120 && BW.nearWater(G, center.x, center.z, 40)) kind = 'harbour';
+      else if (town.era >= 2 && !count('tavern') && pop >= 20 && town.wood >= 120 && town.stone >= 60) kind = 'tavern';
+      else if (town.era >= 2 && !count('monastery') && pop >= 22 && town.wood >= 140 && town.stone >= 120) kind = 'monastery';
       else if (town.wood >= 60 && count('house') < pop / 4) kind = 'house';
       if (!kind && sites === 0 && rng.next() < 0.5) {
         const cand = bs.filter((b) => BW.canUpgrade(b) && b.kind !== 'center');
@@ -133,6 +143,7 @@
       if (kind) {
         let spot;
         if (kind === 'mine') { const v = G.nearest(G.rocks, center.x, center.z, 45); spot = v && BW.findSpot(G, kind, town, v.x, v.z, 4, 9, rng); }
+        else if (kind === 'harbour') spot = BW.findSpot(G, kind, town, center.x, center.z, 12, 45, rng, 80);
         else spot = BW.findSpot(G, kind, town, center.x, center.z, 12, 16 + Math.min(36, count('house') * 4 + count('field') * 4), rng);
         if (spot) { G.pay(town, BW.BUILDINGS[kind].cost); BW.placeBuilding(G, kind, town, spot.x, spot.z, spot.rot); }
       }
@@ -159,7 +170,7 @@
       // Defend: hostile units close to home.
       const threat = G.nearest(G.people, center.x, center.z, 38, (p) => p.owner !== town.owner && p.job === 'soldier') || G.nearest(G.creatures, center.x, center.z, 38, (c) => c.owner !== town.owner);
       if (threat) { for (const pl of myPl) { pl.mode = 'attack'; pl.targetId = threat.id; } }
-      else if (soldiers >= need && G.time > (T.nextAttack || (420 - ai.aggression * 150))) {
+      else if ((town.favor || 0) < 3 && soldiers >= need && G.time > (T.nextAttack || (420 - ai.aggression * 150))) {
         // Attack the nearest player building.
         let target = null, bd = 1e12;
         for (const b of G.buildings) if (b.owner === 0 && b.built) { const d = dist2(b.x, b.z, center.x, center.z) * (b.kind === 'center' ? 1.3 : 1); if (d < bd) { bd = d; target = b; } }
@@ -189,6 +200,17 @@
     for (const p of G.people) { const L = byTown.get(p.town); if (L) L.push(p); }
     G.byTown = byTown;
     const god = G.god;
+    // Buildings where a Legend works: everyone else there works faster.
+    G.legendT = (G.legendT || 0) + dt;
+    if (G.legendT > 1 || !G.legendSites) { G.legendT = 0; const set = new Set(); for (const p of G.people) if (p.legend && p.legend === p.job && p.workId) set.add(p.workId); G.legendSites = set; }
+    // Ages: insight from scholars carries the player forward; rivals advance with time.
+    while ((god.era || 0) + 1 < BW.ERAS.length && (god.insight || 0) >= BW.ERAS[god.era + 1].insight) {
+      god.era++; const era = BW.ERAS[god.era];
+      G.say(`Your people enter the ${era.name}! ${era.desc}`, 'good'); BW.audio.play('win');
+      grantTribute(G, 2, era.name); BW.advise && BW.advise(G, 'era');
+      if (G.ui) G.ui.eraFlash = 6;
+    }
+    for (const t of G.towns) if (t.owner !== 0 && t.alive) t.era = Math.min(BW.ERAS.length - 1, Math.floor(G.time / 480) + (t.insight > 300 ? 1 : 0));
     // Player influence and prayer caps.
     let pop0 = 0, impress0 = 0;
     for (const t of G.towns) {
@@ -196,9 +218,10 @@
       const people = byTown.get(t.id);
       t.pop = people.length; t.cap = G.townCapacity(t); t.impress = G.townImpress(t); t.cap_ = G.storageCap(t);
       t.hasAltar = G.buildings.some((b) => b.town === t.id && b.kind === 'altar' && b.built);
+      t.hasTavern = G.buildings.some((b) => b.town === t.id && b.kind === 'tavern' && b.built);
       if (t.timers.tick === undefined || t.timers.tick + dt >= 1) { const c = G.center(t); t.guards = c ? people.filter((p) => p.job === 'soldier' && dist(p.x, p.z, c.x, c.z) < 40).length : 0; }
       t.fear = Math.max(0, (t.fear || 0) - dt * 0.3); t.fearRecent = Math.max(0, (t.fearRecent || 0) - dt);
-      if (G.season === 'winter' && t.pop) { t.wood = Math.max(0, t.wood - dt * t.pop * 0.02); }
+      if (G.season === 'winter' && t.pop) { G.spend(t, 'wood', Math.min(t.wood, dt * t.pop * 0.02)); }
       if (people.some((p) => p.trait === 'chosen')) t.impress += 20;
       if (t.owner === 0) { pop0 += t.pop; impress0 += t.impress; }
       t.timers.tick = (t.timers.tick || 0) + dt;
@@ -213,6 +236,7 @@
         const fertile = people.filter((p) => p.trait === 'fertile').length;
         if (t.pop >= 2 && t.pop < t.cap && t.food > 15) {
           let rate = (0.016 + 0.028 * Math.min(1, breeders / Math.max(1, t.pop / 8))) * (0.5 + t.happiness) * (1 + fertile * 0.1);
+          rate *= 0.8; // a slower, steadier climb
           if (t.owner === 0 && G.hasUnlock('g_fertility')) rate *= 1.5;
           if (t.owner !== 0) rate *= 0.9;
           if (BW.rand() < rate) spawnBirth(G, t, people);
@@ -234,12 +258,19 @@
     let hap = 0, n = 0; for (const t of G.playerTowns()) if (t.happiness !== undefined) { hap += t.happiness; n++; } hap = n ? hap / n : 0.8;
     god.renownRate = pop0 * 1.2 + god.impress * 0.6 + hap * pop0 * 0.6; // per minute
     god.renown += god.renownRate / 60 * dt;
-    if (god.renown >= 300) { god.renown -= 300; grantTribute(G, 1, 'Renown'); }
+    if (god.renown >= 450) { god.renown -= 450; grantTribute(G, 1, 'Renown'); }
     // History for the stats tab: one sample every 5 seconds, 30 minutes kept.
     G.historyT += dt;
     if (G.historyT >= 5) {
-      G.historyT = 0; const pt = G.playerTown();
-      if (pt) { const tot = {}; for (const k of BW.RESOURCES) tot[k] = 0; for (const t of G.playerTowns()) for (const k of BW.RESOURCES) tot[k] += t[k] || 0; G.history.push({ t: Math.round(G.time), pop: pop0, food: Math.round(tot.food), wood: Math.round(tot.wood), stone: Math.round(tot.stone), iron: Math.round(tot.iron), gold: Math.round(tot.gold), prayer: Math.round(god.prayer), happy: +hap.toFixed(2), tribute: god.tribute }); if (G.history.length > 360) G.history.shift(); }
+      const span = G.historyT; G.historyT = 0; const pt = G.playerTown();
+      // Fold the 5 s flow accumulators into smoothed per-minute rates.
+      for (const k of BW.RESOURCES.concat(['prayer', 'insight'])) {
+        const a = G.flowAcc[k] || { p: 0, c: 0 }; const f = G.flow[k] || (G.flow[k] = { p: 0, c: 0, n: 0 });
+        const pm = a.p / span * 60, cm = a.c / span * 60;
+        f.p = f.n ? f.p * 0.6 + pm * 0.4 : pm; f.c = f.n ? f.c * 0.6 + cm * 0.4 : cm; f.n++;
+        G.flowAcc[k] = { p: 0, c: 0 };
+      }
+      if (pt) { const tot = {}; for (const k of BW.RESOURCES) tot[k] = 0; for (const t of G.playerTowns()) for (const k of BW.RESOURCES) tot[k] += t[k] || 0; G.history.push({ t: Math.round(G.time), pop: pop0, food: Math.round(tot.food), wood: Math.round(tot.wood), stone: Math.round(tot.stone), iron: Math.round(tot.iron), gold: Math.round(tot.gold), prayer: Math.round(god.prayer), happy: +hap.toFixed(2), tribute: god.tribute, insight: Math.round(god.insight || 0), foodP: +G.flow.food.p.toFixed(1), foodC: +G.flow.food.c.toFixed(1), woodP: +G.flow.wood.p.toFixed(1), woodC: +G.flow.wood.c.toFixed(1) }); if (G.history.length > 360) G.history.shift(); }
     }
     // Tribute milestones
     god.popMilestone = god.popMilestone || 20;
@@ -251,11 +282,19 @@
       const c = G.center(t); if (!c) continue;
       let d = 1e9; for (const pc of G.influenceCenters()) d = Math.min(d, dist(pc.x, pc.z, c.x, c.z));
       const cover = clamp((god.influence + 25 - d) / 50, 0, 1);
-      const pressure = cover * (god.impress / (t.impress + 30)) * (t.happiness < 0.5 ? 1.4 : 1);
+      let pressure = cover * (god.impress / (t.impress + 30)) * (t.happiness < 0.5 ? 1.4 : 1);
+      if (G.hasWonder === undefined || G.frame % 120 === 0) G.hasWonder = G.buildings.some((b) => b.owner === 0 && b.kind === 'wonder' && b.built);
+      if (G.hasWonder) pressure += 0.12; // the Great Pyramid is seen from everywhere
+      // Favour won by emissaries: gifts at 6, a peaceful union at 9.
+      if ((t.favor || 0) >= 6 && G.time > (t.timers.nextGift || 0)) {
+        t.timers.nextGift = G.time + 150; const pt = G.playerTown();
+        if (pt) { const gift = t.favor >= 9 ? 80 : 40; G.deposit(pt, 'food', gift); G.deposit(pt, 'wood', gift); G.deposit(pt, 'gold', Math.round(gift / 4)); G.say(`${t.name} sends gifts: ${gift} food, ${gift} wood and ${Math.round(gift / 4)} gold.`, 'good'); }
+      }
+      if ((t.favor || 0) >= 9 && !t.timers.union) { t.timers.union = 1; G.say(`${t.name} joins you in a peaceful union!`, 'good'); townFalls(G, t, 0, 'converted'); continue; }
       let drop = pressure * 0.35 + (t.fear || 0) * 0.004;
       if (t.food <= 0) drop += 0.25;
       if (t.shieldedBySiren) drop += 0;
-      if (pressure < 0.2 && t.food > 0) t.loyalty = Math.min(100, t.loyalty + dt * 0.12);
+      if (pressure < 0.2 && t.food > 0 && G.time > (t.timers.preached || 0)) t.loyalty = Math.min(100, t.loyalty + dt * 0.12); // no recovery while a sermon is fresh
       t.loyalty -= drop * dt;
       t.pressure = pressure;
       if (t.loyalty < 50 && !t.timers.lowMsg) { t.timers.lowMsg = 1; BW.advise(G, 'lowLoyalty'); }
@@ -276,7 +315,7 @@
 
   // Evil acts near a town frighten it (a second conversion channel beside awe).
   function frighten(G, x, z, amount) {
-    for (const t of G.towns) { if (!t.alive) continue; const c = G.center(t); if (!c) continue; const d = dist(c.x, c.z, x, z); if (d < 70) { if (t.owner !== 0) t.fear = Math.min(100, (t.fear || 0) + amount * (1 - d / 90)); else t.fearRecent = 60; } }
+    for (const t of G.towns) { if (!t.alive) continue; const c = G.center(t); if (!c) continue; const d = dist(c.x, c.z, x, z); if (d < 70) { if (t.owner !== 0) { t.fear = Math.min(100, (t.fear || 0) + amount * (1 - d / 90)); t.favor = Math.max(0, (t.favor || 0) - amount * 0.03); } else t.fearRecent = 60; } }
   }
 
   Object.assign(BW, { updateTowns, grantTribute, migrate, townFalls, shiftAlignment, assignJobs, frighten });

@@ -44,7 +44,9 @@ small, .muted { color: var(--muted); }
 #land b { color: var(--gold); font-size: 15px; display: block; }
 #clock { font-size: 12px; color: var(--muted); }
 
-#townpanel { position: absolute; top: 70px; left: 12px; width: 210px; font-size: 13px; }
+#townpanel { position: absolute; top: 70px; left: 12px; width: 236px; font-size: 13px; }
+#townpanel .row b { white-space: nowrap; }
+#townpanel .jobs { max-height: 150px; overflow-y: auto; }
 #townpanel .row { display: flex; justify-content: space-between; padding: 2px 0; }
 #townpanel .jobs { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; }
 #townpanel .jobs .row span:first-child { color: var(--muted); }
@@ -168,3 +170,17 @@ small, .muted { color: var(--muted); }
 .assign button { padding: 2px 9px; font-size: 14px; line-height: 1; }
 .assign b { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
 .assign small { color: var(--muted); }
+
+/* Per-minute production indicators next to each stockpile. */
+#townpanel .row .rate { min-width: 56px; white-space: nowrap; text-align: right; margin-left: 6px; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--muted); }
+#townpanel .row .rate.up { color: #8fd48f; }
+#townpanel .row .rate.down { color: #ff8a70; }
+#erastat.flash b { color: #ffe9a0; text-shadow: 0 0 8px #ffcc55; }
+#stats .tile .rate.up { color: #8fd48f; }
+#stats .tile .rate.down { color: #ff8a70; }
+.roster { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.roster span { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); }
+.roster span.legend { border-color: #ffe9a0; color: #ffe9a0; }
+.adj { font-size: 11px; color: #8fd48f; margin-top: 3px; }
+.holy { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.holy select { background: rgba(0,0,0,0.35); color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }

@@ -160,7 +160,7 @@
       if (day || !h || h.dead || p.hunger > 85) { p.inside = false; p.state = 'idle'; if (h && !h.dead) h.garrison = Math.max(0, h.garrison - 1); if (h) { p.x = h.x + 2.5; p.z = h.z + 2.5; p.y = G.groundY(p.x, p.z); } }
       return;
     }
-    if (!day && p.job !== 'builder' && p.hunger < 80) {
+    if (!day && p.job !== 'builder' && p.hunger < 80 && !(p.mission && p.mission.phase !== 'return' && center && dist(p.x, p.z, center.x, center.z) > 40)) {
       if (p.state !== 'sleepwalk') {
         const h = findFreeHouse(G, town);
         if (h) { p.state = 'sleepwalk'; p.sleepId = h.id; h.garrison++; }
@@ -169,7 +169,7 @@
       if (p.state === 'sleepwalk') {
         const h = G.ents.get(p.sleepId);
         if (!h || h.dead) { p.state = 'idle'; return; }
-        if (moveToward(G, p, h.x, h.z, dt, p.speed, 2.2)) { p.inside = true; p.workIdBackup = p.workId; p.workId = h.id; p.state = 'sleep'; p.slept = 1; }
+        if (moveToward(G, p, h.x, h.z, dt, p.speed, 2.2)) { p.inside = true; p.workIdBackup = p.workId; p.workId = h.id; p.state = 'sleep'; p.slept = 1; p.homeBonus = BW.adjacency(G, h).mul - 1; }
         return;
       }
       if (p.state === 'sleep' && p.hunger < 85) return;
@@ -179,10 +179,11 @@
     if (p.workIdBackup) { p.workId = p.workIdBackup; p.workIdBackup = 0; }
 
     // Eat when hungry.
+    if (p.mission && p.mission.phase === 'act') p.hunger = Math.min(p.hunger, 70); // they carry provisions
     if (p.hunger > 62 && center && (town.food >= 5 || p.hunger > 95)) {
       if (p.state !== 'eatwalk') { p.state = 'eatwalk'; }
       if (moveToward(G, p, center.x, center.z, dt, p.speed, 5.5)) {
-        if (town.food >= 5) { town.food -= 5; p.hunger = Math.max(0, p.hunger - 70); G.particles.burst(p.x, p.y + 1.5, p.z, 4, 1, 0.5, 0xd9b24c, 1.2); }
+        if (town.food >= 5) { G.spend(town, 'food', 5); p.hunger = Math.max(0, p.hunger - 70); G.particles.burst(p.x, p.y + 1.5, p.z, 4, 1, 0.5, 0xd9b24c, 1.2); }
         else p.hunger = Math.max(60, p.hunger - 3);
         p.state = 'idle';
       }
@@ -197,11 +198,39 @@
       case 'builder': return doBuilder(G, p, town, center, dt);
       case 'breeder': return doBreeder(G, p, town, center, dt);
       case 'worshipper': return doWorship(G, p, town, center, dt);
+      case 'scholar': return doScholar(G, p, town, center, dt);
+      case 'merchant': return doMerchant(G, p, town, center, dt);
+      case 'fisher': return doFisher(G, p, town, center, dt);
+      case 'healer': return doHealer(G, p, town, center, dt);
+      case 'missionary': case 'emissary': return doMission(G, p, town, center, dt);
       default: return doIdle(G, p, town, center, dt);
     }
   }
 
-  function workRate(G, p) { let r = 1; if (p.trait === 'strong') r *= 1.3; if (p.hurry > 0) r *= 2; if (p.age > 1500) r *= 0.7; if (p.happy < 0.4) r *= 0.75; return r; }
+  // Skills: every second spent doing a job is experience. Level = sqrt(xp/60),
+  // so Apprentice takes a minute, Expert nine, Legend twenty-five. Each level
+  // is +12% output; a Legend inspires everyone working at the same building.
+  function skillXp(p, job) { return (p.skills && p.skills[job || p.job]) || 0; }
+  function skillLevel(p, job) { return Math.min(5, Math.floor(Math.sqrt(skillXp(p, job) / 60))); }
+  function gainSkill(G, p, dt) {
+    const job = p.job; if (!p.skills || !job || job === 'idle') return;
+    const before = skillLevel(p, job);
+    p.skills[job] = (p.skills[job] || 0) + dt;
+    const after = skillLevel(p, job);
+    if (after > before) {
+      const town = G.ents.get(p.town);
+      if (after >= 5) { p.legend = job; if (town && town.owner === 0) { G.say(`${p.name} is now a LEGEND among ${BW.JOB_NAMES[job].toLowerCase()}s. Co-workers at the same building work 25% faster.`, 'good'); BW.audio.play('chime'); } }
+      else if (after >= 3 && town && town.owner === 0 && (!G.lastSkillMsg || G.time - G.lastSkillMsg > 25)) { G.lastSkillMsg = G.time; G.say(`${p.name} is now an ${BW.SKILL_NAMES[after]} ${BW.JOB_NAMES[job].toLowerCase()}.`, 'info'); }
+    }
+  }
+  function workRate(G, p) {
+    let r = 1 + 0.12 * skillLevel(p, p.job);
+    if (p.trait === 'strong') r *= 1.3; if (p.hurry > 0) r *= 2; if (p.age > 1500) r *= 0.7; if (p.happy < 0.4) r *= 0.75;
+    if (G.legendSites && p.workId && G.legendSites.has(p.workId) && p.legend !== p.job) r *= 1.25;
+    return r;
+  }
+  // Adjacency multiplier of the building a villager works at (cached by buildings.js).
+  function siteMul(G, b) { return b ? BW.adjacency(G, b).mul : 1; }
 
   function goDeposit(G, p, center, dt) {
     if (!center) { p.carry = null; return true; }
@@ -231,8 +260,8 @@
     }
     p.state = 'walk';
     if (moveToward(G, p, f.x + Math.sin(p.id) * 2, f.z + Math.cos(p.id) * 2, dt, p.speed, 1.2)) {
-      p.state = 'work'; p.dir += dt * 0.5;
-      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * (BW.BIOME_GROWTH[f.biome] || 1) * BW.UPGRADE.yield[(f.level || 1) - 1] * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
+      p.state = 'work'; p.dir += dt * 0.5; gainSkill(G, p, dt);
+      f.crop = Math.min(1, f.crop + dt * 0.035 * (f.rain > 0 ? 3 : 1) * workRate(G, p) * siteMul(G, f) * (BW.BIOME_GROWTH[f.biome] || 1) * BW.UPGRADE.yield[(f.level || 1) - 1] * (G.season === 'winter' ? 0.2 : G.weather.kind === 'drought' ? 0.5 : 1));
       f._dirty = true;
       if (f.crop >= 1) { f.crop = 0.05; p.carry = { kind: 'food', amount: 28 }; G.particles.burst(f.x, f.y + 1, f.z, 8, 2, 0.6, 0xe0c040, 1.2, 2); }
     }
@@ -253,7 +282,7 @@
     }
     if (!moveToward(G, p, t.x, t.z, dt, p.speed, 1.6)) { p.state = 'walk'; p.workTimer = 0; }
     else {
-      p.state = 'work';
+      p.state = 'work'; gainSkill(G, p, dt);
       p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
       if (p.workTimer >= (kind === 'tree' ? 4 : 5)) {
         p.workTimer = 0;
@@ -276,9 +305,9 @@
     if (p.carry) return goDeposit(G, p, center, dt);
     if (!moveToward(G, p, mine.x + Math.sin(p.id) * 3.2, mine.z + Math.cos(p.id) * 3.2, dt, p.speed, 1.0)) { p.state = 'walk'; p.workTimer = 0; }
     else {
-      p.state = 'work';
+      p.state = 'work'; gainSkill(G, p, dt);
       p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
-      if (p.workTimer >= 5) { p.workTimer = 0; p.carry = { kind: mine.vein || 'stone', amount: Math.round((mine.vein === 'gold' ? 4 : mine.vein === 'iron' ? 6 : 8) * BW.UPGRADE.yield[(mine.level || 1) - 1]) }; G.particles.burst(mine.x, mine.y + 2, mine.z, 6, 2, 0.5, BW.RES_COLORS[mine.vein] || 0xbbbbcc, 1, 3); p.state = 'idle'; }
+      if (p.workTimer >= 5) { p.workTimer = 0; p.carry = { kind: mine.vein || 'stone', amount: Math.round((mine.vein === 'gold' ? 4 : mine.vein === 'iron' ? 6 : 8) * BW.UPGRADE.yield[(mine.level || 1) - 1] * siteMul(G, mine)) }; G.particles.burst(mine.x, mine.y + 2, mine.z, 6, 2, 0.5, BW.RES_COLORS[mine.vein] || 0xbbbbcc, 1, 3); p.state = 'idle'; }
     }
   }
 
@@ -293,7 +322,7 @@
     if (s.upgrading) {
       p.state = 'walk';
       if (moveToward(G, p, s.x + Math.sin(p.id) * (def.w / 2 + 1), s.z + Math.cos(p.id) * (def.d / 2 + 1), dt, p.speed, 1.2)) {
-        p.state = 'work'; s.progress += dt / BW.UPGRADE.time[s.level] * workRate(G, p); s._dirty = true;
+        p.state = 'work'; gainSkill(G, p, dt); s.progress += dt / BW.UPGRADE.time[s.level] * workRate(G, p); s._dirty = true;
         if (BW.rand() < dt * 3) G.particles.burst(s.x + (BW.rand() - 0.5) * def.w, s.y + 3, s.z + (BW.rand() - 0.5) * def.d, 2, 1.5, 0.4, 0xffd080, 1, 3);
         if (s.progress >= 1) BW.finishUpgrade(G, s);
       }
@@ -306,7 +335,7 @@
     }
     p.state = 'walk';
     if (moveToward(G, p, s.x + Math.sin(p.id) * (def.w / 2 + 1), s.z + Math.cos(p.id) * (def.d / 2 + 1), dt, p.speed, 1.2)) {
-      p.state = 'work';
+      p.state = 'work'; gainSkill(G, p, dt);
       s.progress += dt / def.buildTime * workRate(G, p);
       s.hp = Math.min(s.maxHp, s.hp + dt / def.buildTime * s.maxHp * 0.8);
       s._dirty = true;
@@ -337,24 +366,135 @@
     p.state = 'walk';
     const ang = p.id * 1.7;
     if (moveToward(G, p, a.x + Math.sin(ang) * 3.4, a.z + Math.cos(ang) * 3.4, dt, p.speed, 0.8)) {
-      p.state = 'work'; p.dir = Math.atan2(a.x - p.x, a.z - p.z);
+      p.state = 'work'; p.dir = Math.atan2(a.x - p.x, a.z - p.z); gainSkill(G, p, dt);
       if (town.owner === 0) {
-        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1) * (p.trait === 'pious' ? 1.5 : 1) * (0.6 + 0.6 * (town.happiness === undefined ? 0.8 : town.happiness)) * BW.UPGRADE.yield[(a.level || 1) - 1];
-        G.god.prayer = Math.min(G.god.maxPrayer, G.god.prayer + rate * dt);
+        const rate = 0.9 * (G.hasUnlock('g_prayer') ? 1.6 : 1) * (p.trait === 'pious' ? 1.5 : 1) * (0.6 + 0.6 * (town.happiness === undefined ? 0.8 : town.happiness)) * BW.UPGRADE.yield[(a.level || 1) - 1] * (1 + 0.08 * skillLevel(p, 'worshipper')) * siteMul(G, a);
+        const before = G.god.prayer; G.god.prayer = Math.min(G.god.maxPrayer, G.god.prayer + rate * dt); G.track(town, 'prayer', G.god.prayer - before);
       } else {
-        town.loyalty = Math.min(100, town.loyalty + dt * 0.08);
+        if (G.time > (town.timers.preached || 0)) town.loyalty = Math.min(100, town.loyalty + dt * 0.08); // a fresh sermon drowns out the old gods
       }
       if (BW.rand() < dt * 0.6) G.particles.spawn(p.x, p.y + 1.8, p.z, 0, 1.5, 0, 1.2, 0xffe9a0, 1.5);
     }
+  }
+
+  // Generic "work at a building of this kind" pattern shared by the new jobs.
+  // Returns the building when the villager is at it and working, else null.
+  function atStation(G, p, town, dt, kind, radius = 2.2) {
+    let b = G.ents.get(p.workId);
+    if (!b || b.dead || b.type !== 'building' || b.kind !== kind || !b.built || b.town !== town.id) {
+      const slots = (BW.WORKER_SLOTS[kind] || [3, 3, 3]);
+      b = G.nearest(G.buildings, p.x, p.z, 400, (x) => x.town === town.id && x.kind === kind && x.built && G.people.filter((q) => q.workId === x.id && q.job === p.job && q !== p).length < slots[(x.level || 1) - 1]);
+      if (!b) { p.job = 'idle'; p.workId = 0; return null; }
+      p.workId = b.id;
+    }
+    const ang = p.id * 2.1;
+    if (!moveToward(G, p, b.x + Math.sin(ang) * radius, b.z + Math.cos(ang) * radius, dt, p.speed, 0.9)) { p.state = 'walk'; return null; }
+    p.state = 'work'; p.dir = Math.atan2(b.x - p.x, b.z - p.z); gainSkill(G, p, dt);
+    return b;
+  }
+
+  // Scholars turn study into Insight, which advances the age.
+  function doScholar(G, p, town, center, dt) {
+    const b = atStation(G, p, town, dt, 'library'); if (!b) return;
+    const rate = 0.11 * workRate(G, p) * BW.UPGRADE.yield[(b.level || 1) - 1] * siteMul(G, b);
+    if (town.owner === 0) { G.god.insight += rate * dt; G.track(town, 'insight', rate * dt); }
+    else town.insight = (town.insight || 0) + rate * dt;
+    if (BW.rand() < dt * 0.4) G.particles.spawn(p.x, p.y + 1.9, p.z, 0, 1.2, 0, 1.2, 0x9fd0ff, 1.2);
+  }
+  // Merchants sell surplus food and wood for gold; with nothing to sell they still earn a trickle.
+  function doMerchant(G, p, town, center, dt) {
+    const b = atStation(G, p, town, dt, 'market', 2.8); if (!b) return;
+    p.workTimer = (p.workTimer || 0) + dt * workRate(G, p) * siteMul(G, b) * BW.UPGRADE.yield[(b.level || 1) - 1];
+    if (p.workTimer >= 10) {
+      p.workTimer = 0;
+      const cap = town.cap_ || G.storageCap(town);
+      const surplus = ['food', 'wood', 'stone'].filter((k) => (town[k] || 0) > Math.max(120, cap * 0.45));
+      let gold = 1;
+      if (surplus.length) { const k = surplus[Math.floor(BW.rand() * surplus.length)]; G.spend(town, k, 12); gold = k === 'stone' ? 4 : 3; }
+      G.deposit(town, 'gold', gold);
+      G.particles.burst(b.x, b.y + 2, b.z, 4, 1.5, 0.5, 0xf2d24a, 1, 2);
+    }
+  }
+  // Fishers cast from the harbour's pier; food comes in whatever the season.
+  function doFisher(G, p, town, center, dt) {
+    if (p.carry) return goDeposit(G, p, center, dt);
+    const b = atStation(G, p, town, dt, 'harbour', 3.4); if (!b) return;
+    p.workTimer = (p.workTimer || 0) + dt * workRate(G, p);
+    if (BW.rand() < dt * 0.5) G.particles.spawn(p.x + Math.sin(p.dir) * 2, 0.3, p.z + Math.cos(p.dir) * 2, 0, 0.6, 0, 0.8, 0xbfe6ff, 0.9);
+    if (p.workTimer >= 7) { p.workTimer = 0; p.carry = { kind: 'food', amount: Math.round(18 * BW.UPGRADE.yield[(b.level || 1) - 1] * siteMul(G, b)) }; p.state = 'idle'; }
+  }
+  // Healers walk to the sick and the hurt; otherwise they brew at the hut.
+  function doHealer(G, p, town, center, dt) {
+    let target = p.healId ? G.ents.get(p.healId) : null;
+    if (!target || target.dead || (target.sick <= 0 && target.health >= target.maxHealth - 1) || target.town !== town.id || target.inside) {
+      target = G.nearest(G.people, p.x, p.z, 60, (q) => q !== p && q.town === town.id && !q.inside && !q.held && (q.sick > 0 || q.health < q.maxHealth * 0.6));
+      p.healId = target ? target.id : 0;
+    }
+    if (target) {
+      p.state = 'walk';
+      if (moveToward(G, p, target.x, target.z, dt, p.speed, 1.4)) {
+        p.state = 'work'; gainSkill(G, p, dt);
+        const rate = (1.2 + 0.4 * skillLevel(p, 'healer')) * workRate(G, p);
+        target.sick = Math.max(0, target.sick - dt * 12 * rate); target.health = Math.min(target.maxHealth, target.health + dt * 2 * rate);
+        if (BW.rand() < dt * 2) G.particles.spawn(target.x, target.y + 1.5, target.z, 0, 1.4, 0, 1, 0x8fd48f, 1.1);
+      }
+      return;
+    }
+    const b = atStation(G, p, town, dt, 'herbalist'); if (!b) return;
+    if (BW.rand() < dt * 0.3) G.particles.spawn(b.x, b.y + 3, b.z, 0, 0.8, 0, 2, 0xa0d0a0, 2);
+  }
+  // Missionaries and emissaries walk to a rival town, do their work and come home.
+  function doMission(G, p, town, center, dt) {
+    const m = p.mission;
+    const finish = () => { p.job = 'idle'; p.mission = null; p.workId = 0; p.state = 'idle'; };
+    if (!m) return finish();
+    const target = G.ents.get(m.town);
+    if (m.phase === 'go') {
+      if (!target || !target.alive || target.owner === 0) { m.phase = 'return'; return; }
+      const c = G.center(target); if (!c) { m.phase = 'return'; return; }
+      p.state = 'walk';
+      if (moveToward(G, p, c.x + Math.sin(p.id) * 7, c.z + Math.cos(p.id) * 7, dt, p.speed, 1.5)) { m.phase = 'act'; m.t = 0; if (town.owner === 0) G.say(`${p.name} the ${BW.JOB_NAMES[p.job].toLowerCase()} has reached ${target.name}.`, 'info'); }
+      return;
+    }
+    if (m.phase === 'act') {
+      if (!target || !target.alive || target.owner === 0) { m.phase = 'return'; return; }
+      p.state = 'work'; gainSkill(G, p, dt); m.t += dt;
+      const lvl = skillLevel(p, p.job);
+      if (p.job === 'missionary') {
+        p.dir = G.time * 0.6;
+        target.loyalty = Math.max(0, target.loyalty - dt * (0.45 + 0.09 * lvl)); target.timers.preached = G.time + 180;
+        if (BW.rand() < dt * 1.5) G.particles.spawn(p.x, p.y + 1.9, p.z, (BW.rand() - 0.5) * 2, 1.8, (BW.rand() - 0.5) * 2, 1.4, 0xffe9a0, 1.3);
+        if (m.t > 10 * (m.converted || 0) + 10 && target.loyalty < 60 && town.owner === 0) {
+          const q = G.nearest(G.people, p.x, p.z, 16, (o) => o.town === target.id && o.job !== 'soldier' && !o.held && o.age >= 300);
+          if (q) { m.converted = (m.converted || 0) + 1; BW.migrate(G, q, town); q.hurry = 60; G.say(`${q.name} of ${target.name} heard ${p.name} preach and joins you.`, 'good'); }
+        }
+        if (m.t >= 45) { m.phase = 'return'; if (town.owner === 0) G.say(`${p.name} finished preaching in ${target.name} (loyalty ${Math.round(target.loyalty)}).`, 'info'); }
+      } else {
+        if (m.t >= 20) {
+          m.phase = 'return';
+          target.favor = Math.min(10, (target.favor || 0) + 1 + (lvl >= 3 ? 1 : 0));
+          if (target.ai) target.ai.aggression = Math.max(0, target.ai.aggression - 0.05);
+          if (town.owner === 0) { G.say(`${target.name} favour is now ${target.favor}/9.` + (target.favor >= 9 ? ' They will join you!' : target.favor >= 6 ? ' Gifts will follow.' : target.favor >= 3 ? ' They will not raid you.' : ''), 'good'); BW.audio.play('chime'); }
+          G.particles.burst(p.x, p.y + 2, p.z, 14, 2, 0.6, 0xf2d24a, 1.5, 2, 2);
+        }
+      }
+      return;
+    }
+    // return
+    if (!center) return finish();
+    p.state = 'walk';
+    if (moveToward(G, p, center.x, center.z, dt, p.speed, 8)) finish();
   }
 
   function updateNeeds(G, p, town, dt) {
     const n = p.needs;
     n.food = clamp(1 - p.hunger / 100, 0, 1);
     n.home = town.cap ? clamp(town.cap / Math.max(1, town.pop || 1), 0, 1) : 0;
+    if (p.homeBonus) n.home = Math.min(1, n.home + p.homeBonus);
     n.worship = town.hasAltar ? 1 : 0.35;
     n.safety = clamp(1 - (town.fearRecent || 0) / 60 + (town.guards >= 3 ? 0.35 : 0), 0, 1) * (p.sick > 0 ? 0.5 : 1);
-    n.rest = p.slept ? 1 : 0.5;
+    n.rest = p.slept ? 1 : (town.hasTavern ? 0.8 : 0.5);
+    if (town.hasTavern) n.rest = Math.min(1, n.rest + 0.1);
     p.happy = n.food * 0.35 + n.home * 0.2 + n.worship * 0.15 + n.safety * 0.2 + n.rest * 0.1;
     if (p.trait === 'pious' && !town.hasAltar) p.happy -= 0.1;
     // The loudest unmet need becomes a visible desire.
@@ -382,5 +522,5 @@
     }
   }
 
-  Object.assign(BW, { updatePeople, moveToward, die, hurt, scare, isDay, countJobs, workRate });
+  Object.assign(BW, { updatePeople, moveToward, die, hurt, scare, isDay, countJobs, workRate, skillLevel, skillXp, gainSkill });
 })(window.BW);

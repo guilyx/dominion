@@ -136,15 +136,15 @@
       const p = this.subpanel;
       const mode = this.hand.mode;
       if (this.tab === 'build') {
-        const town = G.playerTown();
+        const town = G.playerTown(); this.buildEra = G.god.era || 0;
         p.innerHTML = `<h3>Build <small>— click an item, then click the ground. R rotates, Shift keeps placing.</small></h3><div class="items">` + BW.BUILD_ORDER.map((k) => {
-          const d = BW.BUILDINGS[k]; const locked = !G.hasUnlock(d.unlock); const can = town && G.canAfford(town, d.cost);
+          const d = BW.BUILDINGS[k]; const eraLocked = (d.era || 0) > (G.god.era || 0); const locked = !G.hasUnlock(d.unlock) || eraLocked; const can = town && G.canAfford(town, d.cost);
           const img = this.icon('b_' + k, () => { const mm = BW.buildingMesh({ id: -1, kind: k, owner: 0 }, 0, 0); const sc = mm.getObjectByName('scaffold'); if (sc) sc.visible = false; return mm; });
-          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}">${img ? `<img src="${img}" alt="">` : ''}<b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
+          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}">${img ? `<img src="${img}" alt="">` : ''}<b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${eraLocked ? `<br><small>Needs the ${BW.ERAS[d.era].name}</small>` : locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
         }).join('') + `</div><div class="desc" id="tabdesc">Hover an item for details.</div>`;
         p.querySelectorAll('.item').forEach((el) => {
           el.addEventListener('mouseenter', () => { $('tabdesc').textContent = BW.BUILDINGS[el.dataset.kind].desc; });
-          el.addEventListener('click', () => { const k = el.dataset.kind; if (!G.hasUnlock(BW.BUILDINGS[k].unlock)) { G.say('Unlock this in the Tribute tab first.', 'warn'); return; } this.hand.setMode(mode && mode.type === 'build' && mode.kind === k ? null : { type: 'build', kind: k }); });
+          el.addEventListener('click', () => { const k = el.dataset.kind; const d = BW.BUILDINGS[k]; if ((d.era || 0) > (G.god.era || 0)) { G.say(`${d.name} needs the ${BW.ERAS[d.era].name}. Scholars at a Library bring it closer.`, 'warn'); return; } if (!G.hasUnlock(d.unlock)) { G.say('Unlock this in the Tribute tab first.', 'warn'); return; } this.hand.setMode(mode && mode.type === 'build' && mode.kind === k ? null : { type: 'build', kind: k }); });
         });
       } else if (this.tab === 'miracles') {
         p.innerHTML = `<h3>Miracles <small>— pick one, then click inside your influence. Shift keeps casting.</small></h3><div class="items">` + BW.MIRACLE_ORDER.map((k) => {
@@ -175,7 +175,7 @@
     renderStats() {
       const G = this.G, p = this.subpanel;
       const SERIES = [['food', '#c98500'], ['stone', '#9085e9'], ['wood', '#d95926'], ['gold', '#199e70'], ['iron', '#e66767']];
-      p.innerHTML = `<div id="stats"><h3>Stats <small>— rates are per minute over the last minute</small></h3>
+      p.innerHTML = `<div id="stats"><h3>Stats <small>— net per minute, with (+produced −consumed) beside each stockpile</small></h3>
         <div class="tiles" id="st-tiles"></div>
         <div class="charts">
           <div class="chart"><h4>Population, last 30 min</h4><canvas id="st-pop" width="380" height="120"></canvas></div>
@@ -191,7 +191,9 @@
       const r = this.rates() || {};
       const town = G.playerTown(); const people = town && G.byTown ? (G.byTown.get(town.id) || []) : [];
       const fmtR = (v) => v === undefined ? '' : (v >= 0 ? '+' : '') + v.toFixed(1) + '/min';
-      const tiles = [['Population', G.god.pop || 0, fmtR(r.pop)], ['Food', Math.round(town ? town.food : 0), fmtR(r.food)], ['Wood', Math.round(town ? town.wood : 0), fmtR(r.wood)], ['Stone', Math.round(town ? town.stone : 0), fmtR(r.stone)], ['Iron', Math.round(town ? town.iron : 0), fmtR(r.iron)], ['Gold', Math.round(town ? town.gold : 0), fmtR(r.gold)], ['Prayer', Math.round(G.god.prayer), fmtR(r.prayer)], ['Happiness', Math.round((town && town.happiness !== undefined ? town.happiness : 0.8) * 100) + '%', ''], ['Impressiveness', Math.round(G.god.impress || 0), ''], ['Influence', Math.round(G.god.influence) + ' m', ''], ['Renown', Math.round(G.god.renown) + '/300', '+' + G.god.renownRate.toFixed(0) + '/min'], ['Soldiers', people.filter((q) => q.job === 'soldier').length, town && town.guards >= 3 ? 'guarding' : '']];
+      const flow = (k) => { const f = G.flow && G.flow[k]; if (!f) return ''; const net = f.p - f.c; return `<span class="${net > 0.05 ? 'up' : net < -0.05 ? 'down' : ''}">${net >= 0 ? '+' : ''}${net.toFixed(1)}/min</span> <small>(+${f.p.toFixed(1)} −${f.c.toFixed(1)})</small>`; };
+      const era = BW.ERAS[G.god.era || 0], next = BW.ERAS[(G.god.era || 0) + 1];
+      const tiles = [['Population', G.god.pop || 0, fmtR(r.pop)], ['Food', Math.round(town ? town.food : 0), flow('food')], ['Wood', Math.round(town ? town.wood : 0), flow('wood')], ['Stone', Math.round(town ? town.stone : 0), flow('stone')], ['Iron', Math.round(town ? town.iron : 0), flow('iron')], ['Gold', Math.round(town ? town.gold : 0), flow('gold')], ['Prayer', Math.round(G.god.prayer), flow('prayer')], ['Insight', Math.round(G.god.insight || 0) + (next ? '/' + next.insight : ''), (G.flow && G.flow.insight ? '+' + G.flow.insight.p.toFixed(1) + '/min · ' : '') + era.name], ['Happiness', Math.round((town && town.happiness !== undefined ? town.happiness : 0.8) * 100) + '%', ''], ['Impressiveness', Math.round(G.god.impress || 0), ''], ['Renown', Math.round(G.god.renown) + '/450', '+' + G.god.renownRate.toFixed(0) + '/min'], ['Soldiers', people.filter((q) => q.job === 'soldier').length, town && town.guards >= 3 ? 'guarding' : '']];
       $('st-tiles').innerHTML = tiles.map(([n, v, rate]) => `<div class="tile"><span>${n}</span><b>${v}</b><div class="rate">${rate}</div></div>`).join('');
       const H = G.history;
       this.lineChart($('st-pop'), H, [['pop', '#3987e5']]);
@@ -294,6 +296,7 @@
       const G = this.G, p = this.subpanel, mode = this.hand.mode;
       if (this.tab === 'build') {
         const town = G.playerTown();
+        if (this.buildEra !== (G.god.era || 0)) { this.buildEra = G.god.era || 0; this.renderTab(); return; }
         p.querySelectorAll('.item').forEach((el) => { const d = BW.BUILDINGS[el.dataset.kind]; const can = town && G.canAfford(town, d.cost); el.querySelector('.cost').style.color = can ? '' : '#ff8a70'; el.classList.toggle('active', !!(mode && mode.type === 'build' && mode.kind === el.dataset.kind)); });
       } else if (this.tab === 'miracles') {
         p.querySelectorAll('.item').forEach((el) => { const d = BW.MIRACLES[el.dataset.kind]; el.querySelector('.cost').style.color = G.god.prayer >= d.cost ? '' : '#ff8a70'; el.classList.toggle('active', !!(mode && mode.type === 'miracle' && mode.kind === el.dataset.kind)); });
@@ -336,7 +339,7 @@
       const G = this.G, p = this.subpanel;
       const cats = {};
       for (const [k, u] of Object.entries(BW.UNLOCKS)) (cats[u.cat] = cats[u.cat] || []).push([k, u]);
-      p.innerHTML = `<h3>Tribute <small>— you have <b style="color:#fff">${G.god.tribute}</b>.</small></h3><div class="desc" style="margin:0 0 6px">Renown flows in at <b style="color:#fff">${G.god.renownRate.toFixed(0)}/min</b> from population (${Math.round((G.god.pop || 0) * 1.2)}), impressiveness (${Math.round((G.god.impress || 0) * 0.6)}) and happiness. Every 300 renown is 1 Tribute (${Math.round(G.god.renown)}/300 now). Bonus Tribute: every 15 villagers, first miracle, first steps, wonders, towns won, lands won.</div>` +
+      p.innerHTML = `<h3>Tribute <small>— you have <b style="color:#fff">${G.god.tribute}</b>.</small></h3><div class="desc" style="margin:0 0 6px">Renown flows in at <b style="color:#fff">${G.god.renownRate.toFixed(0)}/min</b> from population (${Math.round((G.god.pop || 0) * 1.2)}), impressiveness (${Math.round((G.god.impress || 0) * 0.6)}) and happiness. Every 450 renown is 1 Tribute (${Math.round(G.god.renown)}/450 now). Entering a new age is worth 2. Bonus Tribute: every 15 villagers, first miracle, first steps, wonders, towns won, lands won.</div>` +
         Object.entries(cats).map(([cat, list]) => `<div style="margin-top:6px"><small>${cat}</small><div class="items">` + list.map(([k, u]) => {
           const have = !!G.god.unlocks[k];
           return `<div class="item ${have ? 'active' : G.god.tribute < u.cost ? 'locked' : ''}" data-unlock="${k}" title="${esc(u.desc)}"><b>${u.name}</b><span class="cost">${have ? 'Unlocked' : u.cost + ' tribute'}</span></div>`;
@@ -406,14 +409,19 @@
         ${b.kind === 'field' ? `<div>Crop ${Math.round(b.crop * 100)}% · ${workers} farmers${b.rain > 0 ? ' · watered' : ''}${b.biome ? ' · ' + BW.BIOME_NAMES[b.biome] + ' soil ×' + (BW.BIOME_GROWTH[b.biome] || 1) : ''}</div>` : ''}
         ${b.kind === 'house' ? `<div>${b.garrison} sleeping inside</div>` : ''}
         ${b.kind === 'altar' ? `<div>${workers} worshippers</div>` : ''}
+        ${b.kind === 'library' && b.built ? `<div>Insight ${Math.round(G.god.insight || 0)}${BW.ERAS[(G.god.era || 0) + 1] ? ' / ' + BW.ERAS[(G.god.era || 0) + 1].insight + ' for the ' + BW.ERAS[(G.god.era || 0) + 1].name : ' · final age'}</div>` : ''}
+        ${b.built && town && BW.ADJACENCY[b.kind] ? (() => { const a = BW.adjacency(G, b); return `<div class="adj">${a.notes.length ? 'Adjacency +' + Math.round(a.bonus * 100) + '%: ' + esc(a.notes.join(', ')) : 'No adjacency bonus yet (' + Object.keys(BW.ADJACENCY[b.kind]).filter((k) => k !== 'cap').map((k) => k === 'water' ? 'water' : k === 'highGround' ? 'high ground' : k.endsWith('Town') ? BW.BUILDINGS[k.slice(0, -4)].name.toLowerCase() + ' in town' : (BW.BUILDINGS[k] || { name: k }).name.toLowerCase()).join(', ') + ')'}</div>`; })() : ''}
         <div class="muted" style="margin-top:4px">${esc(d.desc)}</div>
-        ${b.owner === 0 && (BW.WORKER_JOB[b.kind] || !b.built || b.upgrading) ? (() => { const job = (!b.built || b.upgrading) ? 'builder' : BW.WORKER_JOB[b.kind]; const n = G.people.filter((p) => p.town === b.town && p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id)).length; const max = job === 'builder' ? 6 : (BW.WORKER_SLOTS[b.kind] || [3, 3, 3])[(b.level || 1) - 1]; const idle = G.people.filter((p) => p.town === b.town && p.job === 'idle' && p.age >= 300).length; return `<div class="assign"><span>${BW.JOB_NAMES[job]}s</span><button id="bi-minus" ${n ? '' : 'disabled'}>−</button><b>${n} / ${max}</b><button id="bi-plus" ${n >= max ? 'disabled' : ''}>+</button><small>${idle} idle</small></div>`; })() : ''}
+        ${b.owner === 0 && (BW.WORKER_JOB[b.kind] || !b.built || b.upgrading) ? (() => { const job = (!b.built || b.upgrading) ? 'builder' : BW.WORKER_JOB[b.kind]; const crew = G.people.filter((p) => p.town === b.town && p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id)); const n = crew.length; const max = job === 'builder' ? 6 : (BW.WORKER_SLOTS[b.kind] || [3, 3, 3])[(b.level || 1) - 1]; const avail = BW.assignable(G, town, job, b.id).length; return `<div class="assign"><span>${BW.JOB_NAMES[job]}s</span><button id="bi-minus" ${n ? '' : 'disabled'}>−</button><b>${n} / ${max}</b><button id="bi-plus" ${n >= max || !avail ? 'disabled' : ''}>+</button><small title="Idle adults and breeders, sleepers included. Children, soldiers and villagers away on missions are not counted.">${avail} available</small></div>` + (crew.length ? `<div class="roster">${crew.map((p) => { const lv = BW.skillLevel(p, job); return `<span class="${lv >= 5 ? 'legend' : ''}" title="${esc(p.name)} · ${Math.round(BW.skillXp(p, job))} xp">${esc(p.name)} · ${BW.SKILL_NAMES[lv]}</span>`; }).join('')}</div>` : ''); })() : ''}
+        ${b.owner === 0 && b.kind === 'monastery' && b.built ? (() => { const rivals = G.enemyTowns(); const sel = rivals.length ? `<select id="bi-target">${rivals.map((t) => `<option value="${t.id}" ${this.holyTarget === t.id ? 'selected' : ''}>${esc(t.name)} · loyalty ${Math.round(t.loyalty)} · favour ${t.favor || 0}/9</option>`).join('')}</select>` : '<span class="muted">No rival towns left.</span>'; return `<div class="holy"><span>Send to</span>${sel}</div><div class="holy">${Object.entries(BW.HOLY_UNITS).map(([k, u]) => `<button data-holy="${k}" title="${esc(u.desc)}" ${rivals.length ? '' : 'disabled'}>${u.name} (${Object.entries(u.cost).map(([r, v]) => v + ' ' + r).join(', ')})</button>`).join('')}<small>${BW.assignable(G, town).length} available</small></div><div class="muted" style="font-size:11px">Missionaries preach for a while: loyalty drops and wavering villagers convert. Emissaries win favour: 3 stops raids, 6 brings gifts, 9 brings the town to you peacefully.</div>`; })() : ''}
         ${b.owner === 0 && BW.canUpgrade(b) ? `<button id="bi-upgrade" style="margin-top:6px" title="${esc(Object.entries(BW.upgradeCost(b)).map(([k, v]) => v + ' ' + k).join(', '))}">Upgrade to level ${(b.level || 1) + 1} (${Object.entries(BW.upgradeCost(b)).map(([k, v]) => v + ' ' + k).join(', ')})</button>` : ''}
         ${b.upgrading ? `<div>Upgrading to level ${b.level + 1}: ${Math.round(b.progress * 100)}%</div>` : b.level > 1 ? `<div>Level ${b.level}</div>` : ''}
         ${b.owner === 0 && b.kind !== 'center' ? '<button id="bi-demolish" class="danger" style="margin-top:6px">Demolish</button>' : ''}
         ${b.owner === 0 && b.kind === 'armory' && b.built ? '<button id="bi-train" style="margin-top:6px">Train swordsmen</button>' : ''}
         ${b.owner === 0 && b.kind === 'altar' && b.built ? '<button id="bi-sac" class="danger" style="margin-top:6px" title="Sacrifice a worshipper for 90 prayer. Evil.">Sacrifice a worshipper</button>' : ''}`;
       const plus = $('bi-plus'); if (plus) plus.onclick = () => { BW.assignWorkers(G, b, +1); this.showBuilding(b); BW.audio.play('ui'); };
+      const tsel = $('bi-target'); if (tsel) { if (!this.holyTarget || !G.ents.get(this.holyTarget)) this.holyTarget = +tsel.value; tsel.onchange = () => { this.holyTarget = +tsel.value; }; }
+      el.querySelectorAll('[data-holy]').forEach((btn) => { btn.onclick = () => { if (BW.trainHoly(G, b, btn.dataset.holy, this.holyTarget)) this.showBuilding(b); }; });
       const minus = $('bi-minus'); if (minus) minus.onclick = () => { BW.assignWorkers(G, b, -1); this.showBuilding(b); BW.audio.play('ui'); };
       const up = $('bi-upgrade'); if (up) up.onclick = () => { if (BW.startUpgrade(G, b)) this.showBuilding(b); };
       const dem = $('bi-demolish'); if (dem) dem.onclick = () => { const t = G.ents.get(b.town); if (t) { for (const k in d.cost) t[k] += Math.floor(d.cost[k] * 0.5); } BW.destroyBuilding(G, b, 0); this.hideBuilding(); };
@@ -432,7 +440,7 @@
     tooltipFor(e) {
       const G = this.G;
       if (!e) return '';
-      if (e.type === 'person') { const t = G.ents.get(e.town); const yrs = Math.floor(e.age / 300); return `${e.name || 'Villager'} · ${e.age < 300 ? 'child' : yrs >= 5 ? 'elder' : 'adult'}, ${yrs} yrs · ${e.job === 'soldier' ? (BW.UNITS[e.unit] || BW.UNITS.melee).name : BW.JOB_NAMES[e.job]}${t ? ' · ' + t.name : ' · wild'}\nHealth ${Math.ceil(e.health)}/${e.maxHealth} · Hunger ${Math.round(e.hunger)}% · Happy ${Math.round((e.happy || 0) * 100)}%${e.trait ? '\n' + BW.TRAITS[e.trait] : ''}${e.desire ? '\n' + BW.NEED_NAMES[e.desire] : ''}${e.carry ? `\nCarrying ${e.carry.amount} ${e.carry.kind}` : ''}${e.state === 'sleep' ? '\nSleeping' : ''}`; }
+      if (e.type === 'person') { const t = G.ents.get(e.town); const yrs = Math.floor(e.age / 300); const lv = e.job !== 'idle' && e.job !== 'soldier' ? BW.skillLevel(e, e.job) : 0; const best = Object.entries(e.skills || {}).sort((a, b) => b[1] - a[1])[0]; return `${e.name || 'Villager'} · ${e.age < 300 ? 'child' : yrs >= 5 ? 'elder' : 'adult'}, ${yrs} yrs · ${e.job === 'soldier' ? (BW.UNITS[e.unit] || BW.UNITS.melee).name : (e.job !== 'idle' ? BW.SKILL_NAMES[lv] + ' ' : '') + BW.JOB_NAMES[e.job]}${lv >= 5 ? ' ★' : ''}${t ? ' · ' + t.name : ' · wild'}${e.job === 'idle' && best && best[1] >= 60 ? '\nBest at: ' + BW.JOB_NAMES[best[0]] + ' (' + BW.SKILL_NAMES[Math.min(5, Math.floor(Math.sqrt(best[1] / 60)))] + ')' : ''}${e.mission ? '\nOn a mission to ' + ((G.ents.get(e.mission.town) || {}).name || 'a rival town') : ''}\nHealth ${Math.ceil(e.health)}/${e.maxHealth} · Hunger ${Math.round(e.hunger)}% · Happy ${Math.round((e.happy || 0) * 100)}%${e.trait ? '\n' + BW.TRAITS[e.trait] : ''}${e.desire ? '\n' + BW.NEED_NAMES[e.desire] : ''}${e.carry ? `\nCarrying ${e.carry.amount} ${e.carry.kind}` : ''}${e.state === 'sleep' ? '\nSleeping' : ''}`; }
       if (e.type === 'tree') return `Tree · ${e.wood} wood${e.fire > 0 ? ' · burning!' : ''}`;
       if (e.type === 'rock') return `${e.kind === 'iron' ? 'Iron vein' : e.kind === 'gold' ? 'Gold vein' : 'Rock'} · ${e.ore} ${e.kind || 'stone'}${e.kind !== 'stone' ? '\nBuild a Mine next to it for endless ' + e.kind : ''}`;
       if (e.type === 'item') return `Heap of ${Math.round(e.amount)} ${e.kind}\nDrop it on a temple to store it`;
@@ -468,6 +476,10 @@
       const mins = god.renownRate > 0 ? (300 - god.renown) / god.renownRate : 0;
       $('renownrate').textContent = god.renownRate > 0 ? `+${god.renownRate.toFixed(0)} renown/min · next in ${mins < 1 ? '<1' : Math.ceil(mins)} min` : '';
       $('influence').textContent = Math.round(god.influence) + ' m';
+      { const era = BW.ERAS[god.era || 0], next = BW.ERAS[(god.era || 0) + 1]; $('era').textContent = era.name; const ins = god.insight || 0; const fi = G.flow && G.flow.insight ? G.flow.insight.p : 0;
+        $('erabar').firstElementChild.style.width = next ? clamp((ins - era.insight) / (next.insight - era.insight) * 100, 0, 100) + '%' : '100%';
+        $('erarate').textContent = next ? `${Math.round(ins)}/${next.insight} insight · ${fi > 0.05 ? '+' + fi.toFixed(1) + '/min · ' + Math.ceil((next.insight - ins) / fi) + ' min' : 'assign scholars to a Library'}` : 'final age';
+        if (this.eraFlash > 0) { this.eraFlash -= 0.25; $('erastat').classList.add('flash'); } else $('erastat').classList.remove('flash'); }
       const day = Math.floor(G.time / G.dayLength) + 1; const hour = Math.floor(G.tod * 24);
       const wk = G.weather.kind; $('clock').textContent = `Day ${day} · ${String(hour).padStart(2, '0')}:00 · ${G.season}${wk !== 'clear' ? ' · ' + wk : ''}${this.game.paused ? ' · PAUSED' : this.game.speed > 1 ? ' · ' + this.game.speed + 'x' : ''}`;
       const town = G.playerTown();
@@ -476,18 +488,19 @@
         $('townname').textContent = town.name;
         $('pop').textContent = `${G.playerTowns().reduce((s, t) => s + (t.pop || 0), 0)} / ${G.playerTowns().reduce((s, t) => s + (t.cap || 0), 0)}`;
         const cap = town.cap_ || G.storageCap(town);
-        for (const k of BW.RESOURCES) { const el = $(k); if (el) el.textContent = fmt(town[k] || 0) + ' / ' + fmt(cap); }
+        for (const k of BW.RESOURCES) { const el = $(k); if (el) el.textContent = fmt(town[k] || 0) + ' / ' + fmt(cap); const re = $('rate-' + k); const f = G.flow && G.flow[k]; if (re) { if (f && f.n) { const net = f.p - f.c; re.textContent = (net >= 0 ? '+' : '') + net.toFixed(1) + '/min'; re.className = 'rate ' + (net > 0.05 ? 'up' : net < -0.05 ? 'down' : ''); re.title = `Produced ${f.p.toFixed(1)}/min · consumed ${f.c.toFixed(1)}/min`; } else re.textContent = ''; } }
         $('impress').textContent = Math.round(god.impress);
         const hp = Math.round((town.happiness === undefined ? 0.8 : town.happiness) * 100);
         $('happy').textContent = hp + '%'; $('happy').style.color = hp < 45 ? '#ff8a70' : hp > 70 ? '#8fd48f' : '';
         const counts = BW.countJobs(G, town, people);
-        $('jobs').innerHTML = BW.JOBS.map((j) => `<div class="row"><span>${BW.JOB_NAMES[j]}</span><span>${counts[j]}</span></div>`).join('');
+        const avail = BW.assignable(G, town).length;
+        $('jobs').innerHTML = BW.JOBS.filter((j) => j === 'idle' || counts[j]).map((j) => `<div class="row"><span>${BW.JOB_NAMES[j]}</span><span>${counts[j]}${j === 'idle' ? ` <small title="Adults you can assign right now (children are not counted)">· ${avail} available</small>` : ''}</span></div>`).join('');
         $('autojobs').checked = !!town.autoJobs;
       }
       // Objectives
       const land = this.game.landFor(G.landIndex);
       $('objlist').innerHTML = land.objectives.map((o) => `<li class="${this.game.objectiveDone(o) ? 'done' : ''}">${esc(o)}</li>`).join('');
-      $('enemytowns').innerHTML = G.enemyTowns().map((t) => `<div class="town"><span style="color:#${BW.TEAM_COLORS[t.color].toString(16).padStart(6, '0')}">${esc(t.name)} <small>(${t.pop || 0})</small></span><span>loyalty <div class="bar"><i style="width:${clamp(t.loyalty, 0, 100)}%"></i></div></span></div>`).join('');
+      $('enemytowns').innerHTML = G.enemyTowns().map((t) => `<div class="town"><span style="color:#${BW.TEAM_COLORS[t.color].toString(16).padStart(6, '0')}">${esc(t.name)} <small>(${t.pop || 0})</small></span><span>loyalty <div class="bar"><i style="width:${clamp(t.loyalty, 0, 100)}%"></i></div>${t.favor ? `<small title="Favour won by emissaries: 3 stops raids, 6 brings gifts, 9 a peaceful union">♥ ${t.favor}/9</small>` : ''}</span></div>`).join('');
       if (this.tab) this.refreshTab();
       if (G.selectedBuilding) { const b = G.ents.get(G.selectedBuilding); if (b && !b.dead) this.showBuilding(b); else { G.selectedBuilding = 0; this.hideBuilding(); } }
     }
@@ -507,7 +520,7 @@
           <div><small>Choose your creature</small><div class="species">${Object.entries(BW.SPECIES).map(([k, s]) => { const img = this.icon('c_' + k, () => BW.creatureMesh(k, 0)); return `<div class="item ${k === species ? 'active' : ''}" data-sp="${k}">${img ? `<img src="${img}" alt="">` : ''}<b>${s.name}</b><small>${esc(s.desc)}</small></div>`; }).join('')}</div></div>
           <div class="menu"><button id="mm-new">New campaign</button><button id="mm-continue" ${hasSave ? '' : 'disabled'}>Continue</button><button id="mm-load" ${hasSave ? '' : 'disabled'}>Load game…</button><button id="mm-skirmish">Skirmish</button><button id="mm-help">Controls</button></div>
           <div id="mm-slots"></div>
-          <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option><option value="1000" ${opts.size === '1000' ? 'selected' : ''}>Huge</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+          <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option><option value="1000" ${opts.size === '1000' ? 'selected' : ''}>Huge</option><option value="1200" ${opts.size === '1200' ? 'selected' : ''}>Colossal</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
           <p class="muted" style="font-size:12px">Tip: this runs entirely in your browser. Saves live in localStorage.</p>`);
         $('overlaybox').querySelectorAll('[data-sp]').forEach((el) => el.onclick = () => { species = el.dataset.sp; render(); });
         $('mm-new').onclick = () => { BW.audio.init(); g.newCampaign(species, 0); };

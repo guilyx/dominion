@@ -403,6 +403,7 @@
             else if (b.kind === 'armory') { this.recruit(e, b); }
             else if (b.kind === 'mine') { e.job = 'miner'; e.workId = b.id; }
             else if (b.kind === 'lodge') { e.job = 'forester'; e.workId = 0; e.baseId = b.id; }
+            else if (BW.WORKER_JOB[b.kind]) { e.job = BW.WORKER_JOB[b.kind]; e.workId = b.id; }
             else if (b.kind === 'center') { if (e.carry) { G.deposit(pt, e.carry.kind, e.carry.amount); e.carry = null; } e.job = 'idle'; e.workId = 0; }
             if (e.platoon && e.job !== 'soldier') { const pl = G.ents.get(e.platoon); if (pl) { const i = pl.members.indexOf(e.id); if (i >= 0) pl.members.splice(i, 1); if (!pl.members.length) G.remove(pl); } e.platoon = 0; e.maxHealth = 30; }
             G.say(`${e.name} is now a ${BW.JOB_NAMES[e.job]}.`, 'info');

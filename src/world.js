@@ -16,7 +16,9 @@
       this.time = 0;                 // seconds of game time
       this.dayLength = 300;          // seconds per day
       this.tod = 0.3;                // time of day 0..1, start morning
-      this.god = { prayer: 300, maxPrayer: 1000, alignment: 0, tribute: 0, unlocks: {}, miracleImpress: 0, influence: 45, shields: [], stats: { casts: 0, kills: 0, thrown: 0 }, renown: 0, renownRate: 0 };
+      this.god = { prayer: 300, maxPrayer: 1000, alignment: 0, tribute: 0, unlocks: {}, miracleImpress: 0, influence: 45, shields: [], stats: { casts: 0, kills: 0, thrown: 0 }, renown: 0, renownRate: 0, insight: 0, era: 0 };
+      // Production / consumption flow: accumulators per resource, folded into per-minute rates every 5 s.
+      this.flowAcc = {}; this.flow = {};
       this.effects = [];             // timed world effects (rain zones, shields, fires)
       this.msgs = [];
       this.peopleCrowd = BW.makePeopleCrowd(2500);
@@ -64,13 +66,13 @@
     groundY(x, z) { return Math.max(this.terrain.heightAt(x, z), 0); }
 
     addTown(o) {
-      const t = Object.assign({ id: uid(), type: 'town', owner: 0, name: 'Town', color: 0, x: 0, z: 0, centerId: 0, food: 200, wood: 150, stone: 40, iron: 10, gold: 0, loyalty: 100, impress: 0, autoJobs: true, ai: null, timers: {}, alive: true }, o);
+      const t = Object.assign({ id: uid(), type: 'town', owner: 0, name: 'Town', color: 0, x: 0, z: 0, centerId: 0, food: 200, wood: 150, stone: 40, iron: 10, gold: 0, loyalty: 100, impress: 0, autoJobs: true, ai: null, timers: {}, alive: true, favor: 0, era: 0 }, o);
       this.towns.push(t); this.ents.set(t.id, t); return t;
     }
     addPerson(town, x, z, job = 'idle', age) {
       const r = this.rng;
       const traitKeys = ['strong', 'pious', 'fertile', 'coward', 'hardy'];
-      const p = { type: 'person', id: uid(), town: town.id, owner: town.owner, x, z, y: this.groundY(x, z), dir: r.next() * 6.28, job, state: 'idle', tx: x, tz: z, targetId: 0, hunger: r.next() * 40, health: 30, maxHealth: 30, carry: null, workId: 0, platoon: 0, timer: r.next() * 2, held: false, thrown: null, inside: false, speed: 5.5, age: age === undefined ? 300 + r.next() * 900 : age, lifespan: 1900 + r.next() * 700, fear: 0, name: this.makeName(town), trait: r.next() < 0.35 ? traitKeys[Math.floor(r.next() * traitKeys.length)] : '', needs: { food: 1, home: 1, worship: 1, safety: 1, rest: 1 }, happy: 0.8, desire: '', sick: 0, hurry: 0, unit: '', slept: 1 };
+      const p = { type: 'person', id: uid(), town: town.id, owner: town.owner, x, z, y: this.groundY(x, z), dir: r.next() * 6.28, job, state: 'idle', tx: x, tz: z, targetId: 0, hunger: r.next() * 40, health: 30, maxHealth: 30, carry: null, workId: 0, platoon: 0, timer: r.next() * 2, held: false, thrown: null, inside: false, speed: 5.5, age: age === undefined ? 300 + r.next() * 900 : age, lifespan: 1900 + r.next() * 700, fear: 0, name: this.makeName(town), trait: r.next() < 0.35 ? traitKeys[Math.floor(r.next() * traitKeys.length)] : '', needs: { food: 1, home: 1, worship: 1, safety: 1, rest: 1 }, happy: 0.8, desire: '', sick: 0, hurry: 0, unit: '', slept: 1, skills: {} };
       return this._register(p, this.people);
     }
     addTree(x, z, size = 1) {
@@ -178,9 +180,13 @@
 
     // ------------------------------------------------------------ resources
     storageCap(town) { let c = 0; for (const b of this.buildings) if (b.town === town.id && b.built) c += (BW.BUILDINGS[b.kind].storage || 0) * BW.UPGRADE.storage[(b.level || 1) - 1]; return Math.round(c + 40 * this.townBuildings(town, 'house').filter((b) => b.built).length); }
-    deposit(town, kind, amount) { const cap = town.cap_ || this.storageCap(town); town[kind] = Math.min(cap, (town[kind] || 0) + amount); if (town[kind] >= cap && town.owner === 0 && (!this.lastFullMsg || this.time - this.lastFullMsg > 90)) { this.lastFullMsg = this.time; this.say(`${kind.charAt(0).toUpperCase() + kind.slice(1)} storage is full. Build a Storehouse.`, 'warn'); } }
+    // Flow bookkeeping for the player's towns: positive = produced, negative = consumed.
+    track(town, kind, amount) { if (!town || town.owner !== 0 || !amount) return; const f = this.flowAcc[kind] || (this.flowAcc[kind] = { p: 0, c: 0 }); if (amount > 0) f.p += amount; else f.c -= amount; }
+    deposit(town, kind, amount) { const cap = town.cap_ || this.storageCap(town); const before = town[kind] || 0; town[kind] = Math.min(cap, before + amount); this.track(town, kind, town[kind] - before); if (town[kind] >= cap && town.owner === 0 && (!this.lastFullMsg || this.time - this.lastFullMsg > 90)) { this.lastFullMsg = this.time; this.say(`${kind.charAt(0).toUpperCase() + kind.slice(1)} storage is full. Build a Storehouse.`, 'warn'); } }
     canAfford(town, cost) { for (const k in cost) if ((town[k] || 0) < cost[k]) return false; return true; }
-    pay(town, cost) { for (const k in cost) town[k] -= cost[k]; }
+    pay(town, cost) { for (const k in cost) { town[k] -= cost[k]; this.track(town, k, -cost[k]); } }
+    // Spend a resource outside of a purchase (eating, winter fires) and log it as consumption.
+    spend(town, kind, amount) { town[kind] = Math.max(0, (town[kind] || 0) - amount); this.track(town, kind, -amount); }
 
     // ------------------------------------------------------------ messages
     say(text, kind = 'info') { this.msgs.push({ text, kind, t: this.time }); if (this.onMessage) this.onMessage(text, kind); }
@@ -223,8 +229,8 @@
       const pc = this.peopleCrowd; pc.begin();
       const ic = this.iconCrowd; ic.begin();
       const carryCol = BW.RES_COLORS;
-      const TUNIC = { idle: 0, farmer: 0x6fa84a, forester: 0x8a5a2a, miner: 0x6e6e80, builder: 0xd08a2a, breeder: 0xd07aa0, worshipper: 0xf4f0e6, soldier: 0x5a5a6a };
-      const TOOL = { farmer: 0x9a7a4a, forester: 0x7a5a3a, miner: 0x5a5a66, builder: 0x8a5a2a, soldier: 0x9a9aa8 };
+      const TUNIC = { idle: 0, farmer: 0x6fa84a, forester: 0x8a5a2a, miner: 0x6e6e80, builder: 0xd08a2a, breeder: 0xd07aa0, worshipper: 0xf4f0e6, soldier: 0x5a5a6a, scholar: 0x4a5a9a, merchant: 0xc8a040, fisher: 0x3a7aa0, healer: 0x8fd48f, missionary: 0xf0e0c0, emissary: 0x9c4fd0 };
+      const TOOL = { farmer: 0x9a7a4a, forester: 0x7a5a3a, miner: 0x5a5a66, builder: 0x8a5a2a, soldier: 0x9a9aa8, fisher: 0x7a5a3a, healer: 0xe8f0e0, scholar: 0xf4f0e6, missionary: 0xf5d76e, emissary: 0xf2d24a };
       const SKINS = [0xf1c9a5, 0xe0ac7e, 0xc68642, 0x8d5524, 0x6b4423];
       const HAIRS = [0x2b1b0e, 0x0f0f0f, 0x6b3a1a, 0xc9a24a, 0xa0341c];
       const L = this._locals || (this._locals = Array.from({ length: 12 }, () => ({ px: 0, py: undefined, pz: 0, rx: 0, ry: 0, rz: 0, s: 1 })));
@@ -243,7 +249,7 @@
         let tunic = TUNIC[p.job] || team; if (p.unit === 'archer') tunic = 0x3f8f4f; else if (p.unit === 'siege') tunic = 0x5a3a1a;
         const walking = p.state === 'walk' || p.state === 'flee' || p.state === 'eatwalk' || p.state === 'sleepwalk';
         const working = p.state === 'work';
-        const worship = working && p.job === 'worshipper';
+        const worship = working && (p.job === 'worshipper' || p.job === 'missionary');
         const idle = p.state === 'idle' && !p.thrown;
         const ph = p.timer * 11 + p.id;
         const swing = walking ? Math.sin(ph) * 0.75 : 0;
@@ -269,7 +275,7 @@
         pc.setPartColor(i, P.hair, elder ? 0xb8b8b8 : look.hair);
         pc.setPartColor(i, P.legL, 0x5a4a3a); pc.setPartColor(i, P.legR, 0x5a4a3a);
         pc.setPartColor(i, P.armL, look.skin); pc.setPartColor(i, P.armR, look.skin);
-        pc.setPartColor(i, P.band, p.trait === 'chosen' ? 0xffffff : team);
+        pc.setPartColor(i, P.band, p.trait === 'chosen' || p.legend ? 0xffffff : team);
         if (p.carry) pc.setPartColor(i, P.carry, carryCol[p.carry.kind]);
         if (S[P.tool]) pc.setPartColor(i, P.tool, TOOL[p.job] || 0x9a9aa8);
         if (S[P.shield]) pc.setPartColor(i, P.shield, team);
@@ -324,7 +330,6 @@
       if (data.rng !== undefined) this.rng.s = data.rng;
       if (data.weather) this.weather = data.weather; if (data.season) this.season = data.season; if (data.director) this.director = data.director;
       this.history = data.history || [];
-        for (const b of this.buildings) { if (!b.level) b.level = 1; if (b.upgrading === undefined) b.upgrading = false; }
       // Older saves: ore became stone.
       for (const t of this.towns) { if (t.ore !== undefined) { t.stone = (t.stone || 0) + t.ore; delete t.ore; } for (const k of BW.RESOURCES) if (t[k] === undefined) t[k] = 0; }
       for (const r of this.rocks) if (!r.kind) r.kind = 'stone';
@@ -333,6 +338,11 @@
       if (this.god.renown === undefined) { this.god.renown = 0; this.god.renownRate = 0; }
       this.navDirty = true;
       this.buildings = data.buildings; this.creatures = data.creatures; this.platoons = data.platoons;
+      for (const b of this.buildings) { if (!b.level) b.level = 1; if (b.upgrading === undefined) b.upgrading = false; }
+      if (this.god.insight === undefined) { this.god.insight = 0; this.god.era = 0; }
+      for (const t of this.towns) { if (t.favor === undefined) t.favor = 0; if (t.era === undefined) t.era = 0; }
+      for (const p of this.people) if (!p.skills) p.skills = {};
+      this.flowAcc = {}; this.flow = {};
       for (const L of [this.towns, this.people, this.trees, this.rocks, this.items, this.buildings, this.creatures, this.platoons]) for (const e of L) { e.dead = false; this.ents.set(e.id, e); }
       BW.setUidFloor(data.nextId);
       for (const b of this.buildings) this._buildBuildingMesh(b);

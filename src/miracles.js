@@ -27,7 +27,7 @@
       if (!G.hasUnlock(def.unlock)) { G.say('Miracle not unlocked. Spend Tribute to learn it.', 'warn'); return false; }
       if (G.god.prayer < def.cost) { G.say('Not enough Prayer Power. Assign more worshippers to an altar.', 'warn'); return false; }
       if (!G.inInfluence(x, z)) { G.say('You can only cast miracles inside your influence.', 'warn'); return false; }
-      G.god.prayer -= def.cost;
+      G.god.prayer -= def.cost; G.track(G.playerTown(), 'prayer', -def.cost);
       BW.shiftAlignment(G, def.align);
       G.god.stats.casts++;
       G.god.miracleImpress += def.cost / 6;

@@ -17,6 +17,8 @@
     winter: ['Winter is here. Crops barely grow and your people burn wood to stay warm. Keep the store full.', 'Winter is when the weak die. Fewer mouths, more wood.'],
     plague: ['Plague! Heal the sick before it spreads, and keep them away from the temple.', 'Throw the sick out of town. Far. Preferably into the sea.'],
     unhappy: ['Your villagers are unhappy. Check what they lack: food, homes, an altar, safety.', 'Unhappy people pray harder. Let them stew.'],
+    era: ['A new age! New buildings are open to you in the Build tab. Keep the scholars studying.', 'Progress. Now build the armoury and put it to use.'],
+    legend: ['A legend among your workers. Keep them at their trade and everyone beside them improves.', 'Work them until they drop. Legends are replaceable.'],
     settle: ['A new settlement. Send it families and it will grow into a second heart for your faith.', 'A second temple means a second army.'],
     converted: ['They chose you. Treat them as your own and the next town will follow.', 'They folded without a fight. Weak. But useful.'],
     conquered: ['Taken by force. It will take time before they truly believe.', 'That is how it is done. Who is next?'],
