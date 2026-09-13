@@ -277,6 +277,10 @@
         g.add(win(0.7, 0.7, -1.2, 1.5, 2.02)); g.add(win(0.7, 0.7, 1.2, 1.5, 2.02)); g.add(win(0.7, 0.7, 2.02, 1.5, 0, Math.PI / 2)); g.add(win(0.7, 0.7, -2.02, 1.5, 0, Math.PI / 2));
         g.add(cone(3.1, 1.8, 4, roof, 0, 3.3, 0, Math.PI / 4));
         const ch = box(0.5, 1.4, 0.5, 0x8a8a8a, 1.2, 3.4, 1.0); ch.name = 'chimney'; g.add(ch);
+        const variant = Math.abs(b.id || 0) % 3;
+        if (variant === 0) { for (let i = 0; i < 5; i++) g.add(box(0.12, 0.6, 0.12, 0x8a6a48, -2.4 + i * 1.2, 0.3, 2.9)); g.add(box(4.9, 0.08, 0.08, 0x8a6a48, 0, 0.5, 2.9)); g.add(sphere(0.3, 0x5faa4a, -2.0, 0.3, 2.5)); }
+        else if (variant === 1) { const aw = box(2.0, 0.06, 1.2, roof, -0.2, 2.15, 2.6); aw.rotation.x = 0.3; g.add(aw); g.add(cyl(0.05, 0.05, 1.5, 5, 0x5a3a1a, -1.1, 1.4, 3.1), cyl(0.05, 0.05, 1.5, 5, 0x5a3a1a, 0.7, 1.4, 3.1)); g.add(box(0.7, 0.5, 0.7, 0x9a7a4a, -1.3, 0.25, 2.7)); }
+        else { g.add(box(1.4, 1.6, 1.2, 0xc8b690, 2.6, 0.8, -0.6)); const lt = box(1.8, 0.08, 1.5, roof, 2.6, 1.75, -0.6); lt.rotation.z = -0.25; g.add(lt); g.add(cyl(0.35, 0.35, 0.7, 8, 0x7a4a22, 2.8, 0.35, 1.1)); }
         break;
       }
       case 'field': {
@@ -361,6 +365,103 @@
         g.add(box(0.4, 2.6, 0.4, 0xf2d24a, -1.0, 4.6, 0).rotateZ ? (() => { const a1 = box(0.4, 2.6, 0.4, 0xf2d24a, -1.1, 4.8, 0); a1.rotation.z = 0.5; return a1; })() : null);
         const a2 = box(0.4, 2.6, 0.4, 0xf2d24a, 1.1, 4.8, 0); a2.rotation.z = -0.5; g.add(a2);
         g.add(box(0.5, 2.2, 0.5, 0xf2d24a, -0.4, 2.9, 0), box(0.5, 2.2, 0.5, 0xf2d24a, 0.4, 2.9, 0));
+        break;
+      }
+      case 'library': {
+        // A stone hall with a colonnaded porch, a reading roof and a scroll tower.
+        g.add(box(5, 0.5, 5, 0xc8c0b0, 0, 0.25, 0));
+        g.add(box(4.2, 2.8, 3.6, 0xe6dcc6, 0, 1.9, -0.4));
+        for (let i = -1; i <= 1; i++) g.add(cyl(0.18, 0.2, 2.8, 8, 0xf0e8d8, i * 1.5, 1.9, 1.9));
+        g.add(box(4.8, 0.4, 1.6, 0xd8cfb8, 0, 3.5, 1.5));
+        g.add(cone(3.4, 1.4, 4, roof, 0, 4.2, 0, Math.PI / 4));
+        g.add(cyl(0.7, 0.8, 2.2, 8, 0xe6dcc6, 1.5, 4.6, -1.2)); g.add(cone(0.95, 0.9, 8, roof, 1.5, 6.1, -1.2));
+        g.add(win(0.6, 0.9, -1.4, 2.0, 1.42)); g.add(win(0.6, 0.9, 1.4, 2.0, 1.42));
+        g.add(box(0.9, 0.5, 0.3, 0x8a5a2a, -1.6, 0.75, 2.4), box(0.9, 0.5, 0.3, 0xb8862b, -1.6, 1.25, 2.4)); // stacked scrolls by the door
+        break;
+      }
+      case 'granary': {
+        // Raised on stilts against rats, with a ladder and sacks below.
+        for (const [px, pz] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) g.add(cyl(0.16, 0.18, 1.4, 6, 0x6a4a2a, px, 0.7, pz));
+        g.add(box(3.6, 0.3, 3.6, 0x8a6a48, 0, 1.5, 0));
+        g.add(cyl(1.7, 1.8, 2.6, 10, 0xd8b878, 0, 2.9, 0));
+        g.add(cone(2.2, 1.6, 10, 0xb08a4a, 0, 5.0, 0));
+        g.add(box(0.3, 1.6, 0.05, 0x5a3a1a, 1.9, 0.8, 1.2), box(0.3, 1.6, 0.05, 0x5a3a1a, 1.9, 0.8, 0.5)); for (let i = 0; i < 3; i++) g.add(box(0.05, 0.08, 0.8, 0x5a3a1a, 1.9, 0.4 + i * 0.45, 0.85));
+        g.add(sphere(0.45, 0xd9b24c, -1.2, 0.4, 2.2), sphere(0.4, 0xd9b24c, -0.4, 0.35, 2.4));
+        break;
+      }
+      case 'market': {
+        // A cobbled square with three awning stalls, crates and a well.
+        g.add(cyl(3.2, 3.4, 0.3, 12, 0xa89a82, 0, 0.15, 0));
+        const stall = (x, z, ry, col) => { const st = new THREE.Group(); st.add(box(2.2, 0.9, 1.2, 0x8a6a48, 0, 0.75, 0)); for (const sx of [-1, 1]) st.add(cyl(0.07, 0.07, 2.4, 5, 0x5a3a1a, sx * 1.0, 1.4, -0.5)); const aw = box(2.5, 0.08, 1.6, col, 0, 2.5, -0.3); aw.rotation.x = 0.35; st.add(aw); st.add(box(0.5, 0.35, 0.5, 0xd9b24c, -0.6, 1.4, 0.1), box(0.5, 0.35, 0.5, 0xb8563a, 0.5, 1.4, 0.1)); st.position.set(x, 0.3, z); st.rotation.y = ry; return st; };
+        g.add(stall(-1.6, -1.4, 0.5, 0xc83c3c), stall(1.7, -1.2, -0.6, 0xf2d24a), stall(0.2, 1.9, Math.PI, 0x3f8f4f));
+        g.add(cyl(0.6, 0.65, 0.7, 8, 0x8a8a90, 0, 0.65, 0)); g.add(box(0.1, 1.4, 0.1, 0x5a3a1a, -0.5, 1.5, 0), box(0.1, 1.4, 0.1, 0x5a3a1a, 0.5, 1.5, 0), box(1.3, 0.1, 0.6, roof, 0, 2.2, 0));
+        g.add(box(0.7, 0.7, 0.7, 0x9a7a4a, 2.4, 0.65, 1.6), box(0.6, 0.6, 0.6, 0x9a7a4a, 2.4, 1.3, 1.6));
+        break;
+      }
+      case 'harbour': {
+        // A stone quay with a pier running out over the water, a boathouse, a boat and crab pots.
+        g.add(box(4.5, 0.8, 3.2, 0x8a8a90, -0.6, 0.4, -1.2));
+        g.add(box(2.6, 0.25, 6.5, 0x8a6a48, 0.8, 0.9, 1.4));
+        for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) g.add(cyl(0.12, 0.14, 1.6, 6, 0x5a3a1a, 0.8 + sx * 1.2, 0.3, -0.6 + i * 1.6));
+        g.add(box(2.6, 2.0, 2.4, 0xb89a72, -1.7, 1.8, -1.2)); g.add(cone(2.0, 1.1, 4, roof, -1.7, 3.35, -1.2, Math.PI / 4));
+        const hull = box(1.1, 0.5, 2.6, 0x7a4a22, 2.6, 0.35, 2.0); hull.name = 'boat'; g.add(hull);
+        g.add(cyl(0.05, 0.05, 2.4, 5, 0x5a3a1a, 2.6, 1.6, 1.8)); const sail = box(0.04, 1.6, 1.0, 0xf4f0e6, 2.6, 1.8, 2.3); g.add(sail);
+        g.add(box(0.5, 0.5, 0.5, 0x6a5a3a, -0.3, 1.25, 3.8), box(0.5, 0.5, 0.5, 0x6a5a3a, 0.3, 1.25, 4.3));
+        g.add(cyl(0.08, 0.08, 3.6, 5, 0x5a3a1a, 1.9, 2.6, 4.4)); g.add(sphere(0.25, 0xffcc55, 1.9, 4.5, 4.4, { emissive: 0xffaa33, emissiveIntensity: 0.8 }));
+        break;
+      }
+      case 'herbalist': {
+        // A round wattle hut with a thatched cone, drying racks and a herb garden.
+        g.add(cyl(1.8, 1.9, 2.0, 10, 0xc8b89a, 0, 1.0, 0));
+        g.add(cone(2.5, 2.0, 10, 0xb8a060, 0, 3.0, 0));
+        g.add(box(0.7, 1.3, 0.15, 0x4a3018, 0, 0.65, 1.85));
+        for (let i = 0; i < 3; i++) g.add(box(0.5, 0.15, 0.5, i % 2 ? 0x5faa4a : 0x9c4fd0, -1.6 + i * 0.6, 0.15, -1.9));
+        g.add(box(0.06, 1.2, 0.06, 0x5a3a1a, 1.6, 0.6, 1.4), box(0.06, 1.2, 0.06, 0x5a3a1a, 1.6, 0.6, -0.2), box(0.06, 0.06, 1.6, 0x5a3a1a, 1.6, 1.2, 0.6));
+        for (let i = 0; i < 3; i++) g.add(box(0.2, 0.4, 0.15, 0x7fbf3f, 1.6, 0.95, 0.1 + i * 0.5));
+        g.add(cyl(0.25, 0.3, 0.5, 6, 0x333333, -1.5, 0.25, 1.2));
+        break;
+      }
+      case 'tavern': {
+        // Two-storey timber-framed inn with a hanging sign, a barrel and benches.
+        g.add(box(4.6, 2.0, 4.2, 0xd8c6a0, 0, 1.0, 0));
+        g.add(box(5.0, 1.8, 4.6, 0xe6dcc6, 0, 2.9, 0));
+        for (let i = -2; i <= 2; i++) { g.add(box(0.12, 1.8, 0.12, 0x5a3a1a, i * 1.15, 2.9, 2.32)); g.add(box(0.12, 1.8, 0.12, 0x5a3a1a, i * 1.15, 2.9, -2.32)); }
+        g.add(box(5.0, 0.12, 4.6, 0x5a3a1a, 0, 2.0, 0));
+        g.add(cone(3.7, 1.7, 4, roof, 0, 4.6, 0, Math.PI / 4));
+        g.add(box(1.0, 1.5, 0.2, 0x4a3018, 0, 0.75, 2.1));
+        g.add(win(0.7, 0.7, -1.4, 1.2, 2.12), win(0.7, 0.7, 1.4, 1.2, 2.12), win(0.7, 0.7, -1.4, 3.0, 2.32), win(0.7, 0.7, 1.4, 3.0, 2.32));
+        g.add(box(0.06, 0.06, 1.0, 0x5a3a1a, 2.4, 2.2, 2.6)); g.add(box(0.05, 0.7, 0.7, 0xc83c3c, 2.4, 1.75, 3.0));
+        const bar = cyl(0.4, 0.4, 0.8, 8, 0x7a4a22, -2.0, 0.4, 2.7); g.add(bar); g.add(box(1.6, 0.12, 0.4, 0x8a6a48, 1.4, 0.5, 2.8), box(0.1, 0.4, 0.3, 0x8a6a48, 0.8, 0.2, 2.8), box(0.1, 0.4, 0.3, 0x8a6a48, 2.0, 0.2, 2.8));
+        const ch = box(0.5, 1.2, 0.5, 0x8a8a8a, 1.6, 5.0, -1.0); ch.name = 'chimney'; g.add(ch);
+        break;
+      }
+      case 'monastery': {
+        // A cloister: a walled garden, a chapel with a bell tower, and a light on the tower.
+        g.add(box(6, 0.4, 6, 0xc8c0b0, 0, 0.2, 0));
+        for (const [w, d, x, z] of [[6, 0.35, 0, -2.85], [6, 0.35, 0, 2.85], [0.35, 6, -2.85, 0], [0.35, 6, 2.85, 0]]) g.add(box(w, 1.6, d, 0xd8cfb8, x, 1.0, z));
+        g.add(box(3.4, 3.0, 2.6, 0xe6dcc6, -0.6, 1.9, -1.2)); g.add(cone(2.4, 1.5, 4, roof, -0.6, 4.15, -1.2, Math.PI / 4));
+        g.add(box(1.4, 1.4, 1.4, 0xe6dcc6, 1.9, 5.0, -1.6)); g.add(cyl(0.9, 0.9, 5.2, 4, 0xe6dcc6, 1.9, 2.6, -1.6)); g.add(cone(1.1, 1.4, 4, roof, 1.9, 6.4, -1.6, Math.PI / 4));
+        g.add(sphere(0.28, 0xb8862b, 1.9, 5.0, -1.6));
+        const orb = sphere(0.35, 0xffe9a0, 1.9, 7.4, -1.6, { emissive: 0xffcc55, emissiveIntensity: 0.9 }); orb.name = 'orb'; g.add(orb);
+        g.add(box(0.15, 1.2, 0.15, 0xf5d76e, -0.6, 4.6, -1.2), box(0.7, 0.15, 0.15, 0xf5d76e, -0.6, 4.9, -1.2));
+        for (let i = 0; i < 4; i++) g.add(cyl(0.4, 0.4, 0.5, 6, 0x5faa4a, -1.6 + i * 1.1, 0.6, 1.8));
+        g.add(cyl(0.5, 0.55, 0.5, 8, 0x8a8a90, 1.6, 0.6, 1.2)); g.add(cyl(0.1, 0.1, 0.9, 6, 0x9fd0ff, 1.6, 1.2, 1.2));
+        break;
+      }
+      case 'obelisk': {
+        g.add(box(4, 0.6, 4, 0xd8cfb8, 0, 0.3, 0)); g.add(box(2.8, 0.6, 2.8, 0xc8bda8, 0, 0.9, 0));
+        const shaft = cyl(0.5, 0.9, 10, 4, 0xe6dcc6, 0, 6.2, 0); shaft.rotation.y = Math.PI / 4; g.add(shaft);
+        const tip = cone(0.72, 1.4, 4, 0xf5d76e, 0, 11.9, 0, Math.PI / 4); tip.material = mat(0xf5d76e, { emissive: 0xffcc55, emissiveIntensity: 0.6 }); g.add(tip);
+        for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + Math.PI / 4; g.add(cyl(0.12, 0.12, 1.2, 5, 0xb8862b, Math.cos(a) * 1.9, 1.8, Math.sin(a) * 1.9)); g.add(sphere(0.18, 0xffaa33, Math.cos(a) * 1.9, 2.5, Math.sin(a) * 1.9, { emissive: 0xff6600, emissiveIntensity: 0.8 })); }
+        const orb = sphere(0.4, 0xffffff, 0, 13.2, 0, { emissive: 0xffe4a0, emissiveIntensity: 1 }); orb.name = 'orb'; g.add(orb);
+        break;
+      }
+      case 'terraces': {
+        // Stepped garden terraces with irrigation channels and a shrine on top.
+        for (let i = 0; i < 4; i++) { const w = 7 - i * 1.5; g.add(box(w, 0.8, w, 0xa89a82, 0, 0.4 + i * 0.8, 0)); const crop = box(w - 0.6, 0.35, w - 0.6, i % 2 ? 0x7fbf3f : 0x5faa4a, 0, 0.95 + i * 0.8, 0); crop.name = 'garden'; g.add(crop); }
+        for (let i = 0; i < 3; i++) g.add(box(0.3, 0.1, 7 - i * 1.5 + 0.2, 0x55aaff, 0, 1.05 + i * 0.8, 0));
+        g.add(cyl(0.5, 0.6, 1.2, 8, 0xe6dcc6, 0, 3.8, 0)); g.add(cone(0.9, 0.8, 8, roof, 0, 4.8, 0));
+        g.add(box(0.15, 1.2, 0.15, 0x6a4a2a, 3.2, 3.2, 3.2), box(0.15, 1.2, 0.15, 0x6a4a2a, -3.2, 3.2, -3.2));
         break;
       }
       case 'wonder': {

@@ -11,10 +11,18 @@
     const T = G.terrain;
     const hw = def.w / 2, hd = def.d / 2;
     if (!T.inBounds(x, z)) return 'Out of bounds';
-    for (const [ox, oz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [0, 0]]) if (!T.isLand(x + ox, z + oz)) return 'Must be on land';
-    let hmin = 1e9, hmax = -1e9;
-    for (const [ox, oz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [0, 0], [0, hd], [0, -hd], [hw, 0], [-hw, 0]]) { const h = T.heightAt(x + ox, z + oz); hmin = Math.min(hmin, h); hmax = Math.max(hmax, h); }
-    if (hmax - hmin > 3.2) return 'Ground too steep';
+    if (def.coast) {
+      // Harbours straddle the shore: the centre on land, water within reach of the pier.
+      if (!T.isLand(x, z)) return 'Must be on land';
+      if (!nearWater(G, x, z, 9)) return 'Must touch the water';
+      if (nearWater(G, x, z, 2.5)) return 'Too far into the water';
+    } else {
+      for (const [ox, oz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [0, 0]]) if (!T.isLand(x + ox, z + oz)) return 'Must be on land';
+      let hmin = 1e9, hmax = -1e9;
+      for (const [ox, oz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [0, 0], [0, hd], [0, -hd], [hw, 0], [-hw, 0]]) { const h = T.heightAt(x + ox, z + oz); hmin = Math.min(hmin, h); hmax = Math.max(hmax, h); }
+      if (hmax - hmin > 3.2) return 'Ground too steep';
+    }
+    if (def.era && town && (town.owner === 0 ? (G.god.era || 0) : (town.era || 0)) < def.era) return 'Needs the ' + BW.ERAS[def.era].name;
     // Tile buildings sit one per hex; walls, gates and roads are free-form.
     const tiled = !def.line && kind !== 'gate';
     if (tiled) { const h = BW.hex.toHex(x, z); for (const b of G.buildings) { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') continue; const bh = BW.hex.toHex(b.x, b.z); if (bh.q === h.q && bh.r === h.r) return 'Tile occupied'; } }
@@ -31,6 +39,69 @@
     if (requireInfluence && town && town.owner === 0 && !G.inInfluence(x, z)) return 'Outside your influence';
     if (town) { const c = G.center(town); if (c && dist(c.x, c.z, x, z) > 70) return 'Too far from the town'; }
     return null;
+  }
+
+  function nearWater(G, x, z, r) {
+    const T = G.terrain;
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; if (!T.isLand(x + Math.sin(a) * r, z + Math.cos(a) * r)) return true; }
+    return false;
+  }
+
+  // Civilization-style adjacency: what sits on the six neighbouring hexes (and
+  // a few town-wide wonders) multiplies what a building produces. Cached for 2 s.
+  function adjacency(G, b) {
+    if (b._adj && G.time - b._adj.t < 2) return b._adj;
+    const rules = BW.ADJACENCY[b.kind];
+    const out = { t: G.time, mul: 1, bonus: 0, notes: [] };
+    if (!rules) { b._adj = out; return out; }
+    const h = BW.hex.toHex(b.x, b.z);
+    const seen = {};
+    for (const o of G.buildings) {
+      if (o === b || !o.built || o.town !== b.town) continue;
+      const d = BW.BUILDINGS[o.kind]; if (d.line || o.kind === 'gate') continue;
+      const oh = BW.hex.toHex(o.x, o.z);
+      const dq = oh.q - h.q, dr = oh.r - h.r;
+      const hexDist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+      if (hexDist === 1 && rules[o.kind]) { seen[o.kind] = (seen[o.kind] || 0) + 1; out.bonus += rules[o.kind]; }
+      if (rules[o.kind + 'Town'] && !seen[o.kind + 'Town']) { seen[o.kind + 'Town'] = 1; out.bonus += rules[o.kind + 'Town']; out.notes.push(BW.BUILDINGS[o.kind].name + ' in town +' + Math.round(rules[o.kind + 'Town'] * 100) + '%'); }
+    }
+    for (const k in seen) if (!k.endsWith('Town')) out.notes.push(seen[k] + '× ' + BW.BUILDINGS[k].name + ' +' + Math.round(rules[k] * seen[k] * 100) + '%');
+    if (rules.water && nearWater(G, b.x, b.z, 9)) { out.bonus += rules.water; out.notes.push('by the water +' + Math.round(rules.water * 100) + '%'); }
+    if (rules.highGround && b.y > 11) { out.bonus += rules.highGround; out.notes.push('high ground +' + Math.round(rules.highGround * 100) + '%'); }
+    out.bonus = Math.min(rules.cap || 1, out.bonus);
+    out.mul = 1 + out.bonus;
+    b._adj = out; return out;
+  }
+
+  // The one pool used by both the assignment buttons and the "available" count,
+  // so the panel never promises villagers that cannot be assigned. Sleepers
+  // count (they are woken); children, soldiers, held villagers and anyone away
+  // on a mission do not.
+  function assignable(G, town, excludeJob, excludeSite) {
+    return G.people.filter((p) => p.town === town.id && p.age >= 300 && !p.held && !p.thrown && !p.dead && p.job !== 'soldier' && !p.mission && (p.job === 'idle' || p.job === 'breeder') && !(p.job === excludeJob && (excludeJob === 'forester' ? p.baseId === excludeSite : p.workId === excludeSite)));
+  }
+  function wake(G, p) {
+    if (p.inside) { const h = G.ents.get(p.workId); if (h && h.kind === 'house') { h.garrison = Math.max(0, h.garrison - 1); p.x = h.x + 2.5; p.z = h.z + 2.5; p.y = G.groundY(p.x, p.z); } p.inside = false; }
+    if (p.state === 'sleepwalk') { const h = G.ents.get(p.sleepId); if (h) h.garrison = Math.max(0, h.garrison - 1); }
+    p.workIdBackup = 0; p.state = 'idle'; p.path = null;
+  }
+
+  // Monastery: turn a villager into a missionary or an emissary bound for a rival town.
+  function trainHoly(G, b, kind, targetTownId) {
+    const town = G.ents.get(b.town); const def = BW.HOLY_UNITS[kind]; if (!town || !def) return false;
+    const target = G.ents.get(targetTownId);
+    if (!target || !target.alive || target.owner === town.owner) { if (town.owner === 0) G.say('Pick a rival town first.', 'warn'); return false; }
+    if (def.cost.prayer && G.god.prayer < def.cost.prayer) { if (town.owner === 0) G.say(`Needs ${def.cost.prayer} prayer.`, 'warn'); return false; }
+    const cost = {}; for (const k in def.cost) if (k !== 'prayer') cost[k] = def.cost[k];
+    if (!G.canAfford(town, cost)) { if (town.owner === 0) G.say('Not enough ' + Object.keys(cost).join(', ') + '.', 'warn'); return false; }
+    const pool = assignable(G, town).sort((p, q) => (p.job === 'idle' ? 0 : 1) - (q.job === 'idle' ? 0 : 1) || BW.dist2(p.x, p.z, b.x, b.z) - BW.dist2(q.x, q.z, b.x, b.z));
+    const p = pool[0]; if (!p) { if (town.owner === 0) G.say('No available villagers to train.', 'warn'); return false; }
+    if (def.cost.prayer) { G.god.prayer -= def.cost.prayer; G.track(town, 'prayer', -def.cost.prayer); }
+    G.pay(town, cost);
+    wake(G, p); p.job = kind; p.workId = b.id; p.baseId = 0; p.mission = { town: target.id, phase: 'go', t: 0 };
+    G.particles.burst(b.x, b.y + 3, b.z, 16, 2, 0.6, 0xffe9a0, 1.4, 2, 2);
+    if (town.owner === 0) { G.say(`${p.name} sets out for ${target.name} as ${kind === 'emissary' ? 'an emissary' : 'a missionary'}.`, 'good'); BW.audio.play('chime'); }
+    return true;
   }
 
   function placeBuilding(G, kind, town, x, z, rot = 0, built = false) {
@@ -51,7 +122,10 @@
     G.particles.burst(b.x, b.y + 3, b.z, 30, 4, 1, 0xffe9a0, 1.6, 2, 3);
     if (b.owner === 0) {
       if (!def.line) { BW.audio.play('build'); G.say(def.name + ' completed.', 'good'); }
-      if (b.kind === 'wonder') BW.grantTribute(G, 2, 'Wonder built');
+      if (b.kind === 'wonder') { BW.grantTribute(G, 2, 'Great Pyramid built'); for (const t of G.enemyTowns()) t.loyalty = Math.max(0, t.loyalty - 12); G.say('The Great Pyramid rises. Every tribe in the land is shaken.', 'good'); }
+      if (b.kind === 'obelisk' || b.kind === 'terraces') BW.grantTribute(G, 1, def.name + ' built');
+      if (b.kind === 'library' && !G.god.stats.libraryMsg) { G.god.stats.libraryMsg = 1; G.say('Assign scholars to the Library: their Insight carries you into the Bronze Age.', 'info'); }
+      if (b.kind === 'monastery') G.say('Click the Monastery to send missionaries and emissaries to rival towns.', 'info');
       if (b.kind === 'center' && b.newTown) foundSettlement(G, b);
     }
   }
@@ -130,7 +204,7 @@
       }
       if (b.kind === 'field' && b.built) {
         if (G.weather.kind === 'rain' || G.weather.kind === 'storm') b.rain = Math.max(b.rain || 0, 1);
-        let grow = (b.rain > 0 ? 0.02 : 0.003) * (BW.BIOME_GROWTH[b.biome] || 1) * BW.UPGRADE.yield[(b.level || 1) - 1];
+        let grow = (b.rain > 0 ? 0.02 : 0.003) * (BW.BIOME_GROWTH[b.biome] || 1) * BW.UPGRADE.yield[(b.level || 1) - 1] * adjacency(G, b).mul;
         if (G.season === 'winter') grow *= 0.15; else if (G.weather.kind === 'drought') grow *= 0.4;
         if (b.crop < 1) { b.crop = Math.min(1, b.crop + grow * dt); if (BW.rand() < dt) b._dirty = true; }
       }
@@ -216,12 +290,15 @@
     const max = job === 'builder' ? 6 : (BW.WORKER_SLOTS[b.kind] || [3, 3, 3])[(b.level || 1) - 1];
     if (delta > 0) {
       if (workers.length >= max) { G.say('No more room for workers there.', 'warn'); return; }
-      const pool = G.people.filter((p) => p.town === town.id && p.age >= 300 && !p.held && !p.inside && p.job !== 'soldier' && (p.job === 'idle' || p.job === 'breeder') && !(p.job === job && (job === 'forester' ? p.baseId === b.id : p.workId === b.id)));
-      pool.sort((p, q) => (p.job === 'idle' ? 0 : 1) - (q.job === 'idle' ? 0 : 1) || BW.dist2(p.x, p.z, b.x, b.z) - BW.dist2(q.x, q.z, b.x, b.z));
-      const p = pool[0]; if (!p) { G.say('No idle villagers. Free someone up first (drop them on the temple).', 'warn'); return; }
-      p.job = job; p.state = 'idle'; p.path = null; if (job === 'forester') { p.baseId = b.id; p.workId = 0; } else p.workId = b.id;
+      const pool = assignable(G, town, job, b.id);
+      // Prefer the idle, then whoever already knows the job best, then the nearest.
+      pool.sort((p, q) => (p.job === 'idle' ? 0 : 1) - (q.job === 'idle' ? 0 : 1) || BW.skillXp(q, job) - BW.skillXp(p, job) || BW.dist2(p.x, p.z, b.x, b.z) - BW.dist2(q.x, q.z, b.x, b.z));
+      const p = pool[0]; if (!p) { G.say('No available villagers. Free someone up first (click their building and press −, or drop them on the temple).', 'warn'); return; }
+      wake(G, p); p.job = job; if (job === 'forester') { p.baseId = b.id; p.workId = 0; } else p.workId = b.id;
+      if (town.owner === 0) G.god.stats.assigned = (G.god.stats.assigned || 0) + 1;
     } else if (workers.length) {
-      const p = workers[workers.length - 1]; p.job = 'idle'; p.workId = 0; p.baseId = 0; p.state = 'idle';
+      workers.sort((p, q) => BW.skillXp(p, job) - BW.skillXp(q, job)); // release the least experienced first
+      const p = workers[0]; p.job = 'idle'; p.workId = 0; p.baseId = 0; p.state = 'idle'; p.path = null;
     }
   }
 
@@ -242,5 +319,5 @@
   }
 
   BW.hexOccupied = (G, q, r) => G.buildings.some((b) => { const d = BW.BUILDINGS[b.kind]; if (d.line || b.kind === 'gate') return false; const h = BW.hex.toHex(b.x, b.z); return h.q === q && h.r === r; });
-  Object.assign(BW, { footprintOk, placeBuilding, completeBuilding, damageBuilding, destroyBuilding, igniteBuilding, igniteTree, updateBuildings, findSpot, placeLine, foundSettlement, upgradeCost, canUpgrade, startUpgrade, finishUpgrade, assignWorkers });
+  Object.assign(BW, { adjacency, assignable, nearWater, trainHoly, wake, footprintOk, placeBuilding, completeBuilding, damageBuilding, destroyBuilding, igniteBuilding, igniteTree, updateBuildings, findSpot, placeLine, foundSettlement, upgradeCost, canUpgrade, startUpgrade, finishUpgrade, assignWorkers });
 })(window.BW);

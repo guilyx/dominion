@@ -59,8 +59,39 @@ Touch works too: one finger pans or grabs, two fingers pinch to zoom and twist t
 **Building** is on a hex grid: pick a building and the ghost snaps to the nearest tile, one building per tile, with the grid shown around your cursor while you place. Walls, gates and roads are free-form lines, and roads can run under buildings. The menu tucks away while you place so you can see the ground.
 
 **Villagers** eat, sleep in houses at night, and work a job. Drop a villager on a field, house,
-altar, armoury, mine, lodge, construction site, tree or rock to give them that job, or click a
-building and use the + / − controls to staff it from the idle pool.
+altar, armoury, mine, lodge, library, market, harbour, herbalist, construction site, tree or
+rock to give them that job, or click a building and use the + / − controls to staff it. The
+"available" count next to the buttons is the exact pool the + button draws from (idle adults and
+breeders, sleepers included; never children, soldiers or villagers away on a mission).
+
+**Skills.** Every second a villager spends at a job is experience in it: Novice, Apprentice
+(a minute), Journeyman, Expert (nine minutes), Master, Legend (twenty-five). Each level is +12%
+output, and a Legend inspires everyone at the same building by a further 25%. The building panel
+lists the crew with their rank; the + button picks the most experienced available villager, the −
+button releases the least. Hover a villager to see their rank and what they are best at.
+
+**Ages.** Scholars at a Library produce Insight, and Insight carries your people from the Stone
+Age through the Bronze, Iron and Classical Ages. Each age opens new buildings (granary, market,
+harbour and herbalist; then tavern, monastery, armoury, towers and statues; then the wonders)
+and pays two Tribute. The top bar shows the age, the Insight meter and the minutes to the next
+age. Rival tribes advance with time.
+
+**Adjacency.** Like Civilization, what sits on the six neighbouring hexes matters: fields next to
+a granary or the water grow faster, mines on high ground yield more, altars pray harder beside
+shrines, statues and wonders, houses are happier beside a market or tavern, markets earn more
+beside houses and a harbour. The building panel shows the bonus and what would raise it.
+
+**New trades.** Merchants at a Market sell surplus food, wood and stone for gold. Fishers at a
+Harbour (it must touch the water) bring food in every season. Healers from the Herbalist's hut
+walk to the sick and the hurt. The Tavern makes the whole town rest better.
+
+**Holy work.** The Monastery trains **missionaries** (60 prayer) who walk to a rival town and
+preach: its loyalty drops while they speak and wavering villagers convert on the spot; and
+**emissaries** (30 gold) who win favour: at 3 the town stops raiding you, at 6 it sends gifts,
+at 9 it joins you in a peaceful union. Favour is lost when you terrorise them.
+
+**Wonders.** The Great Pyramid shakes every town in the land; the Obelisk of Dawn makes every
+altar in its town yield 30% more prayer; the Terraces of Plenty make every field grow 40% faster.
 
 **Upgrades.** Temples, houses, fields, altars, lodges, mines, storehouses, armouries and towers
 have three levels. Click a building and pay the upgrade; builders raise it over time. Each level
@@ -77,11 +108,13 @@ makes saplings sprout around it so foresters never run out, and forests regrow s
 own. Storehouses raise the storage cap. Stone builds walls, altars and towers; iron trains
 soldiers; gold pays for statues and wonders.
 
-**Stats.** Press `I` for per-minute rates of every resource, population and prayer, thirty-minute
-charts of population and stockpiles, who does what, and which needs your people lack.
+**Production.** Every stockpile in the town panel carries a live per-minute net figure (hover it
+for produced and consumed separately). Press `I` for the full picture: produced, consumed and net
+per resource, prayer and Insight, thirty-minute charts of population and stockpiles, who does
+what, and which needs your people lack.
 
 **Tribute and renown.** Renown accrues every second from population, impressiveness and
-happiness; every 300 renown is one Tribute point, and the top bar shows the meter and the minutes
+happiness; every 450 renown is one Tribute point, and the top bar shows the meter and the minutes
 to the next point. Milestones (every 15 villagers, first miracle, first steps, wonders, towns and
 lands won) add bonus points. Walls, gates and the Shrine (a small wonder) need no unlock.
 
@@ -137,7 +170,8 @@ the nearest wall.
 villagers on it to found a second town.
 
 **Biomes.** Moisture and temperature fields carve the island into grassland, jungle, marsh,
-desert, badlands, tundra and alpine snow. Each biome has its own ground colours, tree density
+desert, badlands, savanna, volcanic ash, tundra and alpine snow. Coastlines are domain-warped,
+with islets, inland lakes and mountain ridges. Each biome has its own ground colours, tree density
 and tree type; fields grow at different rates on different soil (jungle fastest, desert and
 tundra slowest); deserts hide more gold, badlands more iron.
 

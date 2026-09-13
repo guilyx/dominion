@@ -23,15 +23,22 @@
     _rawHeight(x, z) {
       const n = this.noise;
       const nx = x / this.size, nz = z / this.size;
-      // Large-scale island shape, distorted radius so the coast is not a circle.
-      const ang = Math.atan2(nz, nx);
-      const wob = 0.12 * n.fbm(Math.cos(ang) * 2.1 + 7.3, Math.sin(ang) * 2.1 + 3.1, 3);
-      const r = Math.hypot(nx, nz) / (0.46 + wob);
-      const mask = 1 - smoothstep(0.55, 1.0, r);
+      // Domain-warped radial mask: bays, peninsulas and a ragged coastline.
+      const wx = nx + 0.11 * n.fbm(nx * 2.3 + 9.1, nz * 2.3 + 4.7, 3), wz = nz + 0.11 * n.fbm(nx * 2.3 + 21.7, nz * 2.3 + 13.3, 3);
+      const ang = Math.atan2(wz, wx);
+      const wob = 0.13 * n.fbm(Math.cos(ang) * 2.1 + 7.3, Math.sin(ang) * 2.1 + 3.1, 3);
+      const r = Math.hypot(wx, wz) / (0.46 + wob);
+      let mask = 1 - smoothstep(0.55, 1.0, r);
+      // Satellite islets around the main island.
+      if (!this._islets) { const rng = new BW.RNG(this.seed * 3 + 11); this._islets = []; for (let i = 0; i < 4; i++) { const a = rng.next() * 6.28, rr = 0.36 + rng.next() * 0.1; this._islets.push({ x: Math.cos(a) * rr, z: Math.sin(a) * rr, s: 0.05 + rng.next() * 0.05 }); } }
+      for (const is of this._islets) { const d = Math.hypot(nx - is.x, nz - is.z) / is.s; mask = Math.max(mask, 1 - smoothstep(0.5, 1.0, d)); }
       let h = n.fbm(nx * 3.2 + 11, nz * 3.2 + 5, 6, 2.1, 0.5);  // -1..1
       h = (h + 0.35) * 22;
       const ridge = 1 - Math.abs(n.fbm(nx * 6 + 40, nz * 6 + 40, 4));
-      h += ridge * ridge * 22 * smoothstep(0.15, 0.75, mask);
+      h += ridge * ridge * 24 * smoothstep(0.15, 0.75, mask);
+      // Inland lakes: gentle depressions where the lowland noise dips.
+      const lake = n.fbm(nx * 2.2 + 77, nz * 2.2 + 33, 3);
+      if (lake > 0.5 && h < 12) { const l = Math.min(1, (lake - 0.5) / 0.12); const shore = Math.min(1, (12 - h) / 5); h -= l * l * (3 - 2 * l) * 10 * shore; } // a few broad lakes with gentle shores
       h = h * mask - 6 * (1 - mask);
       return h;
     }
@@ -147,6 +154,8 @@
       w.swamp = smoothstep(0.1, 0.26, m) * smoothstep(12, 6, h);
       w.jungle = smoothstep(0.06, 0.24, t) * smoothstep(-0.1, 0.06, m) * (1 - w.swamp);
       w.badlands = smoothstep(-0.08, -0.28, m) * smoothstep(0.06, -0.14, t) * (1 - w.tundra) * (1 - w.desert);
+      w.savanna = smoothstep(-0.06, -0.22, m) * smoothstep(0.02, 0.18, t) * (1 - w.desert) * (1 - w.badlands);
+      w.volcanic = smoothstep(24, 32, h) * smoothstep(0.35, 0.7, this.slopeAt(x, z)) * (1 - w.tundra);
       let sum = 0; for (const k in w) sum += w[k];
       if (sum > 1) { for (const k in w) w[k] /= sum; sum = 1; }
       w.grassland = 1 - sum;
@@ -174,6 +183,7 @@
       P.biomes = {
         grassland: tint(0x4f8a3a, 0x3d7031), tundra: tint(0x9aa58a, 0x7f8c70, 0.4), desert: tint(0xd9c47a, 0xc9ae5e, 0.3),
         swamp: tint(0x4a5a2a, 0x3a4a22), jungle: tint(0x2f8a2a, 0x4fb040), badlands: tint(0x7a5040, 0x5a3a30, 0.3),
+        savanna: tint(0xb8a24e, 0x9a8a3e, 0.3), volcanic: tint(0x3a2e2c, 0x5a3a30, 0.2),
       };
       P.grassA = P.biomes.grassland[0]; P.grassB = P.biomes.grassland[1];
       P.sand = new THREE.Color(0xd8c98a).lerp(new THREE.Color(0x8a7a60), evil * 0.5);

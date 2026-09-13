@@ -66,7 +66,7 @@
       const enemies = [];
       for (let k = 1; k <= n; k++) { const p = pos[k]; enemies.push({ name: names[(k - 1) % names.length], x: p.x, z: p.z, pop: 14 + Math.floor(rng.next() * 12), aggression: 0.2 + rng.next() * 0.6, color: 1 + ((k - 1) % 4), creature: rng.next() < 0.4 ? { species: species[Math.floor(rng.next() * 5)], size: 1.8 + rng.next() * 1.2 } : null, godMiracles: rng.next() < 0.4 }); }
       const pp = pos[0];
-      P.customLand = { name: `Isle ${o.seed}`, seed: o.seed, size: o.size, custom: true, intro: `A ${o.size >= 1000 ? 'huge' : o.size >= 800 ? 'vast' : o.size >= 500 ? 'large' : 'small'} island with ${n} rival tribe${n > 1 ? 's' : ''}. Win it by awe or by war.`, player: { x: pp.x, z: pp.z, pop: 18 }, enemies, objectives: ['Convert or conquer every town'], treeDensity: 1.1 };
+      P.customLand = { name: `Isle ${o.seed}`, seed: o.seed, size: o.size, custom: true, intro: `A ${o.size >= 1200 ? 'colossal' : o.size >= 1000 ? 'huge' : o.size >= 800 ? 'vast' : o.size >= 500 ? 'large' : 'small'} island with ${n} rival tribe${n > 1 ? 's' : ''}. Win it by awe or by war.`, player: { x: pp.x, z: pp.z, pop: 18 }, enemies, objectives: ['Convert or conquer every town'], treeDensity: 1.1 };
       return P.customLand;
     }
 
@@ -171,14 +171,14 @@
     scatter(G, land, rng) {
       const T = G.terrain, half = T.half;
       const n = Math.floor(land.size * land.size / 22 * land.treeDensity);
-      const DENS = { grassland: 1.0, tundra: 0.35, desert: 0.12, swamp: 1.3, jungle: 1.6, badlands: 0.25 };
+      const DENS = { grassland: 1.0, tundra: 0.35, desert: 0.12, swamp: 1.3, jungle: 1.6, badlands: 0.25, alpine: 0.3, savanna: 0.45, volcanic: 0.1 };
       for (let i = 0; i < n; i++) {
         const x = rng.range(-half + 4, half - 4), z = rng.range(-half + 4, half - 4);
         const h = T.heightAt(x, z);
         if (h < 1.5 || h > 30) continue;
         if (T.slopeAt(x, z) > 0.8) continue;
         const v = T.noise.fbm(x * 0.03 + 50, z * 0.03 + 50, 3) * 0.5 + 0.5;
-        const w = T.biomeWeights(x, z, h); let dens = 0; for (const k in w) dens += w[k] * DENS[k];
+        const w = T.biomeWeights(x, z, h); let dens = 0; for (const k in w) dens += w[k] * (DENS[k] || 0);
         if (rng.next() > (v * 1.6 + 0.1) * dens) continue;
         let tooClose = false;
         for (const t of G.towns) if (dist(t.x, t.z, x, z) < 14) { tooClose = true; break; }
