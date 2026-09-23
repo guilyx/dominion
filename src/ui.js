@@ -135,18 +135,8 @@
       const G = this.G; if (!G) return;
       const p = this.subpanel;
       const mode = this.hand.mode;
-      if (this.tab === 'build') {
-        const town = G.playerTown(); this.buildEra = G.god.era || 0;
-        p.innerHTML = `<h3>Build <small>— click an item, then click the ground. R rotates, Shift keeps placing.</small></h3><div class="items">` + BW.BUILD_ORDER.map((k) => {
-          const d = BW.BUILDINGS[k]; const eraLocked = (d.era || 0) > (G.god.era || 0); const locked = !G.hasUnlock(d.unlock) || eraLocked; const can = town && G.canAfford(town, d.cost);
-          const img = this.icon('b_' + k, () => { const mm = BW.buildingMesh({ id: -1, kind: k, owner: 0 }, 0, 0); const sc = mm.getObjectByName('scaffold'); if (sc) sc.visible = false; return mm; });
-          return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}">${img ? `<img src="${img}" alt="">` : ''}<b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${eraLocked ? `<br><small>Needs the ${BW.ERAS[d.era].name}</small>` : locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
-        }).join('') + `</div><div class="desc" id="tabdesc">Hover an item for details.</div>`;
-        p.querySelectorAll('.item').forEach((el) => {
-          el.addEventListener('mouseenter', () => { $('tabdesc').textContent = BW.BUILDINGS[el.dataset.kind].desc; });
-          el.addEventListener('click', () => { const k = el.dataset.kind; const d = BW.BUILDINGS[k]; if ((d.era || 0) > (G.god.era || 0)) { G.say(`${d.name} needs the ${BW.ERAS[d.era].name}. Scholars at a Library bring it closer.`, 'warn'); return; } if (!G.hasUnlock(d.unlock)) { G.say('Unlock this in the Tribute tab first.', 'warn'); return; } this.hand.setMode(mode && mode.type === 'build' && mode.kind === k ? null : { type: 'build', kind: k }); });
-        });
-      } else if (this.tab === 'miracles') {
+      if (this.tab === 'build') this.renderBuild();
+      else if (this.tab === 'miracles') {
         p.innerHTML = `<h3>Miracles <small>— pick one, then click inside your influence. Shift keeps casting.</small></h3><div class="items">` + BW.MIRACLE_ORDER.map((k) => {
           const d = BW.MIRACLES[k]; const locked = !G.hasUnlock(d.unlock); const can = G.god.prayer >= d.cost;
           const hex = '#' + d.color.toString(16).padStart(6, '0');
@@ -250,6 +240,63 @@
       this.hand.setMode(mode && mode.type === 'miracle' && mode.kind === k ? null : { type: 'miracle', kind: k });
     }
 
+    // The build menu, grouped into categories so the panel never outgrows the
+    // screen. The chosen category survives re-renders; a gold dot marks a
+    // category holding something this age just opened that the town lacks.
+    buildCategories() {
+      const cats = BW.BUILD_CATEGORIES.map((c) => ({ id: c.id, name: c.name, kinds: c.kinds.filter((k) => BW.BUILDINGS[k]) }));
+      const seen = new Set(cats.flatMap((c) => c.kinds));
+      const rest = BW.BUILD_ORDER.filter((k) => !seen.has(k));
+      if (rest.length) cats.push({ id: 'other', name: 'Other', kinds: rest });
+      return cats;
+    }
+    // A kind the current age opened and the player has not built yet.
+    isFresh(k) {
+      const G = this.G, d = BW.BUILDINGS[k];
+      if ((d.era || 0) !== (G.god.era || 0) || !(d.era || 0)) return false;
+      if (!G.hasUnlock(d.unlock)) return false;
+      return !G.buildings.some((b) => b.owner === 0 && b.kind === k);
+    }
+    renderBuild() {
+      const G = this.G, p = this.subpanel, mode = this.hand.mode, town = G.playerTown();
+      this.buildEra = G.god.era || 0;
+      const cats = this.buildCategories();
+      if (!cats.some((c) => c.id === this.buildCat)) this.buildCat = cats[0].id;
+      const cat = cats.find((c) => c.id === this.buildCat);
+      const chips = cats.map((c) => {
+        const open = c.kinds.filter((k) => { const d = BW.BUILDINGS[k]; return (d.era || 0) <= (G.god.era || 0) && G.hasUnlock(d.unlock); }).length;
+        const fresh = c.kinds.some((k) => this.isFresh(k));
+        return `<button class="chip ${c.id === this.buildCat ? 'active' : ''} ${open ? '' : 'locked'}" data-cat="${c.id}">${esc(c.name)}<span class="n">${open}/${c.kinds.length}</span>${fresh ? '<i class="dot"></i>' : ''}</button>`;
+      }).join('');
+      p.innerHTML = `<h3>Build <small>— pick a category, then an item, then click the ground. R rotates, Shift keeps placing.</small></h3>
+        <div class="chips" id="buildcats">${chips}</div>
+        <div class="items" id="builditems">${cat.kinds.map((k) => this.buildCard(k, town, mode)).join('')}</div>
+        <div class="desc" id="tabdesc">Hover an item for details.</div>`;
+      $('buildcats').querySelectorAll('[data-cat]').forEach((el) => {
+        el.onclick = () => { this.buildCat = el.dataset.cat; this.renderBuild(); BW.audio.play('ui'); };
+      });
+      this.bindBuildItems();
+    }
+    buildCard(k, town, mode) {
+      const G = this.G, d = BW.BUILDINGS[k];
+      const eraLocked = (d.era || 0) > (G.god.era || 0);
+      const locked = !G.hasUnlock(d.unlock) || eraLocked;
+      const can = town && G.canAfford(town, d.cost);
+      const img = this.icon('b_' + k, () => { const mm = BW.buildingMesh({ id: -1, kind: k, owner: 0 }, 0, 0); const sc = mm.getObjectByName('scaffold'); if (sc) sc.visible = false; return mm; });
+      return `<div class="item ${locked ? 'locked' : ''} ${mode && mode.type === 'build' && mode.kind === k ? 'active' : ''}" data-kind="${k}" title="${esc(d.desc)}">${this.isFresh(k) ? '<i class="dot"></i>' : ''}${img ? `<img src="${img}" alt="">` : ''}<b>${d.name}</b><span class="cost" style="${can ? '' : 'color:#ff8a70'}">${Object.entries(d.cost).map(([r, v]) => `${v} ${r}`).join(', ') || 'free'}</span>${eraLocked ? `<br><small>Needs the ${BW.ERAS[d.era].name}</small>` : locked ? '<br><small>Needs Tribute unlock</small>' : ''}</div>`;
+    }
+    bindBuildItems() {
+      const G = this.G;
+      this.subpanel.querySelectorAll('.item[data-kind]').forEach((el) => {
+        el.addEventListener('mouseenter', () => { const t = $('tabdesc'); if (t) t.textContent = BW.BUILDINGS[el.dataset.kind].desc; });
+        el.addEventListener('click', () => {
+          const k = el.dataset.kind, d = BW.BUILDINGS[k], mode = this.hand.mode;
+          if ((d.era || 0) > (G.god.era || 0)) { G.say(`${d.name} needs the ${BW.ERAS[d.era].name}. Scholars at a Library bring it closer.`, 'warn'); return; }
+          if (!G.hasUnlock(d.unlock)) { G.say('Unlock this in the Tribute tab first.', 'warn'); return; }
+          this.hand.setMode(mode && mode.type === 'build' && mode.kind === k ? null : { type: 'build', kind: k });
+        });
+      });
+    }
     renderCreature() {
       const G = this.G, c = G.playerCreature(), p = this.subpanel;
       if (!c) { p.innerHTML = '<h3>Creature</h3><div class="desc">You have no creature.</div>'; return; }
@@ -296,8 +343,13 @@
       const G = this.G, p = this.subpanel, mode = this.hand.mode;
       if (this.tab === 'build') {
         const town = G.playerTown();
-        if (this.buildEra !== (G.god.era || 0)) { this.buildEra = G.god.era || 0; this.renderTab(); return; }
-        p.querySelectorAll('.item').forEach((el) => { const d = BW.BUILDINGS[el.dataset.kind]; const can = town && G.canAfford(town, d.cost); el.querySelector('.cost').style.color = can ? '' : '#ff8a70'; el.classList.toggle('active', !!(mode && mode.type === 'build' && mode.kind === el.dataset.kind)); });
+        if (this.buildEra !== (G.god.era || 0)) { this.renderBuild(); return; }
+        p.querySelectorAll('.item[data-kind]').forEach((el) => {
+          const k = el.dataset.kind, d = BW.BUILDINGS[k], can = town && G.canAfford(town, d.cost);
+          el.querySelector('.cost').style.color = can ? '' : '#ff8a70';
+          el.classList.toggle('active', !!(mode && mode.type === 'build' && mode.kind === k));
+          const dot = el.querySelector('.dot'); if (dot && !this.isFresh(k)) dot.remove();
+        });
       } else if (this.tab === 'miracles') {
         p.querySelectorAll('.item').forEach((el) => { const d = BW.MIRACLES[el.dataset.kind]; el.querySelector('.cost').style.color = G.god.prayer >= d.cost ? '' : '#ff8a70'; el.classList.toggle('active', !!(mode && mode.type === 'miracle' && mode.kind === el.dataset.kind)); });
       } else if (this.tab === 'creature') {
