@@ -70,7 +70,7 @@ small, .muted { color: var(--muted); }
 #tabs { display: flex; gap: 6px; }
 #tabs button { min-width: 90px; }
 #tabs button .key { color: var(--muted); font-size: 11px; margin-left: 4px; }
-#subpanel { display: none; min-width: 560px; max-width: 900px; }
+#subpanel { display: none; min-width: 560px; max-width: 900px; max-height: calc(100vh - 130px); overflow-y: auto; overscroll-behavior: contain; }
 #subpanel.open { display: block; }
 .items { display: flex; flex-wrap: wrap; gap: 6px; }
 .item { width: 128px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.25); cursor: pointer; font-size: 12px; }
@@ -184,3 +184,17 @@ small, .muted { color: var(--muted); }
 .adj { font-size: 11px; color: #8fd48f; margin-top: 3px; }
 .holy { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
 .holy select { background: rgba(0,0,0,0.35); color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+
+/* Build menu categories: a chip row above the grid, so the panel never grows
+   past the screen no matter how many buildings exist. */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.chips .chip { position: relative; padding: 4px 10px; font-size: 12px; border-radius: 14px; background: rgba(0,0,0,0.3); }
+.chips .chip.active { background: linear-gradient(#7a5f2c, #4a3a1c); outline: 1px solid var(--gold); color: #fff; }
+.chips .chip.locked { opacity: 0.55; }
+.chips .chip .n { margin-left: 6px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chips .chip.active .n { color: #ffe2a0; }
+.item { position: relative; }
+.dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.chips .chip .dot { top: 3px; right: 3px; }
+#subpanel::-webkit-scrollbar { width: 8px; }
+#subpanel::-webkit-scrollbar-thumb { background: rgba(230, 184, 74, 0.35); border-radius: 4px; }

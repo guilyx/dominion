@@ -58,6 +58,8 @@ Touch works too: one finger pans or grabs, two fingers pinch to zoom and twist t
 
 **Building** is on a hex grid: pick a building and the ghost snaps to the nearest tile, one building per tile, with the grid shown around your cursor while you place. Walls, gates and roads are free-form lines, and roads can run under buildings. The menu tucks away while you place so you can see the ground.
 
+The build menu is grouped into five categories (Homes & Food, Work & Trade, Faith & Learning, Defence, Monuments) so it stays one screenful however many buildings exist. Each chip counts what is open to you out of what the category holds, and a gold dot marks a category with something the current age just unlocked that you have not built yet. Every panel is capped to the window height and scrolls inside itself, so no tab can run off the top of the screen.
+
 **Villagers** eat, sleep in houses at night, and work a job. Drop a villager on a field, house,
 altar, armoury, mine, lodge, library, market, harbour, herbalist, construction site, tree or
 rock to give them that job, or click a building and use the + / − controls to staff it. The

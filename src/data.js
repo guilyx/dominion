@@ -66,6 +66,16 @@
     emissary: { name: 'Emissary', cost: { gold: 30 }, desc: 'Walks to a rival town and wins favour. Favour 3 stops their raids, 6 brings gifts, 9 brings them to you peacefully.' },
   };
   BW.BUILDING_HEIGHT = { center: 12, house: 4.5, field: 1, altar: 3.2, armory: 5, tower: 11, wonder: 12, storehouse: 4, road: 0.2, wall: 3.5, gate: 4.5, lodge: 4.5, mine: 4, shrine: 5, statue: 8, library: 6, granary: 6, market: 4, harbour: 4, herbalist: 4, tavern: 5, monastery: 9, obelisk: 14, terraces: 4 };
+  // The build menu is grouped so it never grows past the screen. Every kind in
+  // BUILDINGS must appear in exactly one category; anything missed falls into
+  // an "Other" group at render time rather than vanishing from the menu.
+  BW.BUILD_CATEGORIES = [
+    { id: 'homes', name: 'Homes & Food', kinds: ['house', 'field', 'granary', 'harbour', 'herbalist', 'tavern'] },
+    { id: 'work', name: 'Work & Trade', kinds: ['lodge', 'mine', 'storehouse', 'market', 'road'] },
+    { id: 'faith', name: 'Faith & Learning', kinds: ['altar', 'shrine', 'library', 'monastery'] },
+    { id: 'defence', name: 'Defence', kinds: ['wall', 'gate', 'armory', 'tower'] },
+    { id: 'monuments', name: 'Monuments', kinds: ['statue', 'wonder', 'obelisk', 'terraces', 'center'] },
+  ];
   BW.BUILD_ORDER = ['house', 'field', 'altar', 'lodge', 'mine', 'library', 'storehouse', 'road', 'granary', 'market', 'harbour', 'herbalist', 'shrine', 'wall', 'gate', 'tavern', 'monastery', 'armory', 'tower', 'statue', 'wonder', 'obelisk', 'terraces', 'center'];
 
   BW.MIRACLES = {
