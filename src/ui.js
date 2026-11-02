@@ -573,7 +573,7 @@
           <div class="menu"><button id="mm-new">New campaign</button><button id="mm-continue" ${hasSave ? '' : 'disabled'}>Continue</button><button id="mm-load" ${hasSave ? '' : 'disabled'}>Load game…</button><button id="mm-skirmish">Skirmish</button><button id="mm-help">Controls</button></div>
           <div id="mm-slots"></div>
           <div id="skirmish"><label>Seed <input id="sk-seed" value="${esc(opts.seed)}"></label><label>Map <select id="sk-size"><option value="300" ${opts.size === '300' ? 'selected' : ''}>Small</option><option value="500" ${opts.size === '500' ? 'selected' : ''}>Large</option><option value="800" ${opts.size === '800' ? 'selected' : ''}>Vast</option><option value="1000" ${opts.size === '1000' ? 'selected' : ''}>Huge</option><option value="1200" ${opts.size === '1200' ? 'selected' : ''}>Colossal</option></select></label><label>Tribes <select id="sk-tribes">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option ${String(n) === opts.tribes ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
-          <p class="muted" style="font-size:12px">Tip: this runs entirely in your browser. Saves live in localStorage.</p>`);
+          <p class="muted" style="font-size:12px">Tip: this runs entirely in your browser. Saves live in localStorage.<br>Dominion ${esc(BW.version())}</p>`);
         $('overlaybox').querySelectorAll('[data-sp]').forEach((el) => el.onclick = () => { species = el.dataset.sp; render(); });
         $('mm-new').onclick = () => { BW.audio.init(); g.newCampaign(species, 0); };
         $('mm-skirmish').onclick = () => { BW.audio.init(); g.newCampaign(species, 0, true, { seed: parseInt($('sk-seed').value, 10) || 12345, size: parseInt($('sk-size').value, 10), tribes: parseInt($('sk-tribes').value, 10) }); };
