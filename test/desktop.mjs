@@ -76,7 +76,9 @@ try {
   check('a land generates and plays', !played.error && played.people > 0 && played.buildings > 0, JSON.stringify(played));
   console.log('       ' + JSON.stringify(played));
 
-  await win.screenshot({ path: path.join(SHOTS, 'desktop.png') });
+  // Diagnostic only; see the note in smoke.mjs.
+  try { await win.screenshot({ path: path.join(SHOTS, 'desktop.png'), timeout: 60000, animations: 'disabled' }); }
+  catch (e) { console.log(`  note screenshot skipped (${e.message.split('\n')[0]})`); }
 } catch (e) {
   failures++;
   console.error('\n  FAIL the run threw\n       ' + e.message);

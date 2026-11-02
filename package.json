@@ -11,6 +11,7 @@
     "url": "https://github.com/guilyx"
   },
   "main": "desktop/main.js",
+  "desktopName": "dominion.desktop",
   "repository": {
     "type": "git",
     "url": "https://github.com/guilyx/baw.git"
@@ -91,7 +92,6 @@
     "linux": {
       "category": "Game",
       "synopsis": "A browser god game",
-      "desktopName": "dominion.desktop",
       "syncDesktopName": true,
       "target": [
         {
@@ -106,7 +106,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "executableName": "dominion"
     },
     "portable": {
       "artifactName": "dominion-${version}-win-${arch}-portable.${ext}"

@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
@@ -181,6 +182,37 @@ check('every campaign land is playable', () => {
     for (const e of land.enemies) assert(BW.TRIBE_NAMES.includes(e.name), `land "${land.name}" has unknown tribe "${e.name}"`);
   }
 });
+
+// electron-builder only validates its config when it runs, which costs minutes.
+// Checking the keys against its own shipped schema costs nothing and catches an
+// unknown or misplaced option straight away. Skipped on a bare checkout.
+console.log('\nThe packaging config matches electron-builder\'s schema');
+let scheme = null;
+try { scheme = createRequire(import.meta.url)('app-builder-lib/scheme.json'); }
+catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; /* bare checkout: no devDependencies */ }
+if (!scheme) {
+  console.log('  skip app-builder-lib is not installed (run npm install to enable)');
+} else {
+  const build = JSON.parse(read('package.json')).build;
+  const SECTIONS = {
+    linux: 'LinuxConfiguration', win: 'WindowsConfiguration', mac: 'MacConfiguration',
+    nsis: 'NsisOptions', portable: 'PortableOptions',
+  };
+  for (const [key, defName] of Object.entries(SECTIONS)) {
+    if (!build[key]) continue;
+    check(`build.${key} uses only known options`, () => {
+      const def = scheme.definitions[defName];
+      assert(def && def.properties, `electron-builder has no schema for ${defName}`);
+      const unknown = Object.keys(build[key]).filter((k) => !(k in def.properties));
+      assert(!unknown.length, `unknown option(s) for ${defName}: ${unknown.join(', ')}`);
+    });
+  }
+  check('the Windows installer and portable build have distinct names', () => {
+    const a = (build.nsis || {}).artifactName, b = (build.portable || {}).artifactName;
+    if (!a && !b) return;
+    assert(a !== b, 'nsis and portable would write to the same filename and overwrite each other');
+  });
+}
 
 console.log('\nThe portable build is self-contained');
 const out = path.join(ROOT, 'dist', 'test-bundle.html');

@@ -90,6 +90,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+
+      # With devDependencies present this also validates the electron-builder
+      # config against its shipped schema, which the dependency-free job skips.
+      - name: Check the packaging config
+        run: node test/static.mjs
+
       # --dir packs the app without producing installers: fast, and it still
       # catches a broken main process or a bad electron-builder config.
       - name: Package the desktop app (unpacked)

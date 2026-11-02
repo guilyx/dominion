@@ -131,8 +131,13 @@ try {
   });
   check('the game keeps running after a load', !after.error && after.pop > 0, JSON.stringify(after ?? {}) + (after.error || ''));
 
-  await page.screenshot({ path: path.join(SHOTS, 'smoke.png') });
   check('no uncaught page errors', errors.length === 0, errors.slice(0, 5).join('\n       '));
+
+  // A diagnostic, not an assertion: capturing a software-rendered WebGL canvas
+  // can be slow on a CI runner, and a missing screenshot must not fail a run
+  // whose checks all passed.
+  try { await page.screenshot({ path: path.join(SHOTS, 'smoke.png'), timeout: 60000, animations: 'disabled' }); }
+  catch (e) { console.log(`  note screenshot skipped (${e.message.split('\n')[0]})`); }
 } catch (e) {
   failures++;
   console.error('\n  FAIL the run threw\n       ' + e.message);
