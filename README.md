@@ -342,7 +342,11 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 and driven by [Conventional Commits](https://www.conventionalcommits.org).
 Merging the open release pull request bumps the version, writes `CHANGELOG.md`,
 tags the commit, publishes a GitHub Release, and attaches the Windows, macOS and
-Linux builds along with the portable HTML file. See
+Linux builds along with the portable HTML file.
+
+This needs one repository setting enabled once — **Settings → Actions → General
+→ Workflow permissions → Allow GitHub Actions to create and approve pull
+requests** — otherwise release-please cannot open its pull request. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

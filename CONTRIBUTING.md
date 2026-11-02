@@ -77,4 +77,20 @@ Anything that invalidates existing saves is a breaking change.
 
 Maintainers do not tag by hand. Merging the open release pull request does
 everything. To rebuild binaries for an existing tag, run the **Release**
-workflow manually and give it the tag.
+workflow manually and give it the tag; running it with no tag just builds the
+binaries as workflow artifacts, which is a cheap way to check the matrix still
+works.
+
+### One-time repository setup
+
+release-please opens its release pull request as GitHub Actions, which a
+repository forbids by default. Without this it still computes the version and
+pushes its branch, then fails with *"GitHub Actions is not permitted to create
+or approve pull requests"*.
+
+Enable it once, in **Settings → Actions → General → Workflow permissions**:
+
+- [x] Allow GitHub Actions to create and approve pull requests
+
+Workflow permissions themselves are set per workflow in this repository, so the
+read/write radio button above that checkbox can stay on the restricted default.
