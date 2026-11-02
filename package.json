@@ -1,0 +1,116 @@
+{
+  "name": "dominion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A browser god game: raise a tribe through the ages, train a creature, and win the island by awe or by war.",
+  "homepage": "https://github.com/guilyx/baw",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "guilyx",
+    "email": "guilyx@users.noreply.github.com",
+    "url": "https://github.com/guilyx"
+  },
+  "main": "desktop/main.js",
+  "desktopName": "dominion.desktop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guilyx/baw.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.js",
+    "start": "node tools/serve.js",
+    "icon": "node tools/make-icon.js",
+    "desktop": "npm run build && electron .",
+    "test": "npm run test:static && npm run test:smoke",
+    "test:static": "node test/static.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "test:desktop": "node test/desktop.mjs",
+    "dist": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "playwright": "^1.50.0"
+  },
+  "build": {
+    "appId": "io.github.guilyx.dominion",
+    "productName": "Dominion",
+    "artifactName": "dominion-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "desktop/**/*",
+      "dist/index.html"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build-assets"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Dominion",
+      "artifactName": "dominion-${version}-win-${arch}-setup.${ext}"
+    },
+    "mac": {
+      "category": "public.app-category.strategy-games",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "category": "Game",
+      "synopsis": "A browser god game",
+      "syncDesktopName": true,
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "executableName": "dominion"
+    },
+    "portable": {
+      "artifactName": "dominion-${version}-win-${arch}-portable.${ext}"
+    }
+  }
+}

@@ -2,6 +2,9 @@
 // util.js — small helpers shared by every module. Everything hangs off BW.
 // ---------------------------------------------------------------------------
 window.BW = window.BW || {};
+// The bundler stamps the package version into the single-file build; the
+// unbundled page has no stamp and reports itself as a dev build.
+window.BW.version = () => (window.DOMINION_VERSION ? 'v' + window.DOMINION_VERSION : 'dev build');
 
 (function (BW) {
   'use strict';

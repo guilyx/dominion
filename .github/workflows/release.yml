@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Attach the binaries to this existing release tag (leave empty to only build artifacts)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Keeps a release pull request up to date from conventional commits. Merging
+  # it bumps the version, writes CHANGELOG.md, tags and publishes the release.
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # The binaries are built in the same workflow as the release on purpose: a
+  # release published by GITHUB_TOKEN does not trigger a separate workflow.
+  binaries:
+    name: ${{ matrix.name }}
+    needs: [release-please]
+    # `always()` so a manual run (where release-please is skipped) still builds.
+    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux (AppImage + deb)
+          - os: macos-latest
+            name: macOS (dmg + zip)
+          - os: windows-latest
+            name: Windows (installer + portable)
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Build the desktop binaries
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The app is not code-signed, so do not go looking for a certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # The single self-contained page: no install, works offline, every OS.
+      - name: Build the portable single-file game
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node build.js --out "release/dominion-${VERSION}-portable.html"
+
+      - name: Collect the installers
+        shell: bash
+        run: |
+          mkdir -p upload
+          # Installers and archives only: skip electron-builder's unpacked dirs
+          # and its blockmap/metadata files.
+          find release -maxdepth 1 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+               -o -name '*.dmg' -o -name '*.zip' \
+               -o -name '*.exe' -o -name '*.msi' -o -name '*.html' \) \
+            -exec cp {} upload/ \;
+          ls -lh upload
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dominion-${{ matrix.os }}
+          path: upload/
+          if-no-files-found: error
+
+      - name: Attach the binaries to the release
+        if: needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" upload/* --clobber

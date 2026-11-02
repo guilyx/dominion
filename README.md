@@ -9,22 +9,90 @@ your temple, your hand and your creature change to match.
 Everything is original code and procedural art. There are no external assets, no build step and
 no server: it is plain JavaScript on top of [Three.js](https://threejs.org) (vendored, MIT).
 
-## Play
+## Install and play
 
-**Option A (zero setup):** open `index.html` in Chrome, Edge or Firefox.
+Every release ships a desktop build for Windows, macOS and Linux, plus a single HTML file that
+runs anywhere. Grab one from the [latest release](https://github.com/guilyx/baw/releases/latest).
 
-**Option B (any static server):**
+The desktop builds are **not code-signed**, so each system will warn you the first time. The steps
+below are the normal way to accept an unsigned app; they are only needed once.
 
+### Windows
+
+1. Download `dominion-<version>-win-x64-setup.exe` (installer) or
+   `dominion-<version>-win-x64-portable.exe` (no install, runs from anywhere).
+2. Run it. SmartScreen will say "Windows protected your PC" — click **More info**, then
+   **Run anyway**.
+
+The portable build needs no administrator rights and leaves nothing behind.
+
+### macOS
+
+1. Download `dominion-<version>-mac-arm64.dmg` for Apple silicon, or `…-mac-x64.dmg` for Intel.
+2. Open it and drag **Dominion** to Applications.
+3. The first launch is blocked because the app is unsigned. Clear the download quarantine:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Dominion.app
+   ```
+
+   Then open it normally. (Alternatively: launch it once, then go to **System Settings → Privacy
+   & Security** and click **Open Anyway**.)
+
+### Linux
+
+**AppImage** — works on most distributions, no install:
+
+```sh
+chmod +x dominion-*-linux-x86_64.AppImage
+./dominion-*-linux-x86_64.AppImage
+# if your system has no FUSE:
+./dominion-*-linux-x86_64.AppImage --appimage-extract-and-run
 ```
-python3 -m http.server 8000
-# then open http://localhost:8000
+
+**Debian / Ubuntu**:
+
+```sh
+sudo apt install ./dominion-*-linux-amd64.deb
+dominion
 ```
 
-**Option C (single file):** `node build.js` writes `dist/index.html`, a self-contained page you
-can drop anywhere.
+### Any OS, no install at all
 
-Saves live in your browser's localStorage. The game autosaves every two minutes, and F5 / F9
-quick-save / quick-load.
+Download `dominion-<version>-portable.html` and open it in a browser. It is the whole game in one
+file: no server, no network, no dependencies. Works from a USB stick.
+
+Saves live in your browser's (or the app's) local storage. The game autosaves every two minutes,
+and F5 / F9 quick-save and quick-load. Saves made in the browser and in the desktop app are
+separate.
+
+## Run from source
+
+Needs [Node.js](https://nodejs.org) 18 or newer, and nothing else.
+
+```sh
+git clone https://github.com/guilyx/baw.git
+cd baw
+npm start          # serves the game and opens a browser
+```
+
+`npm start` runs a small dependency-free static server, so it behaves the same on Windows, macOS
+and Linux. Other useful commands:
+
+| Command | What it does |
+| --- | --- |
+| `npm start` | Serve the game at `http://localhost:8765` and open it |
+| `npm run build` | Write `dist/index.html`, the portable single-file build |
+| `npm test` | Static checks plus the headless browser smoke test |
+| `npm run test:static` | Data and syntax checks only — about a second, no browser |
+| `npm run desktop` | Build, then run the Electron app from source |
+| `npm run dist` | Build installers for the current platform into `release/` |
+
+`npm start` and `npm run build` need no dependencies at all. The desktop app and the smoke test
+need `npm install` first (Electron and Playwright).
+
+You can also just open `index.html` directly from disk. Chrome, Edge and Firefox allow saving
+from `file://`; Safari does not, so use `npm start` or the desktop app there.
 
 ## Controls
 
@@ -248,7 +316,34 @@ src/hand.js     the divine hand and targeting modes
 src/ui.js       HUD, tabs, overlays
 src/game.js     bootstrap, land generation, main loop, campaign flow
 build.js        bundles everything into dist/index.html
+
+desktop/main.js Electron shell for the packaged desktop app
+tools/serve.js  dependency-free static server behind `npm start`
+tools/make-icon.js  draws build-assets/icon.png with zlib, no image libraries
+test/static.mjs syntax and game-data consistency checks (no browser)
+test/smoke.mjs  headless playthrough of the portable build
+test/desktop.mjs launches the packaged app and plays a land in it
 ```
+
+## Continuous integration and releases
+
+Every pull request runs three jobs:
+
+- **Static checks** — every file parses, the game's data tables agree with each
+  other (no building missing from the menu, no category claiming a building
+  twice, no unlock that nothing defines), and the portable bundle really is
+  self-contained.
+- **Smoke test** — loads the portable build in headless Chromium, plays five
+  minutes of simulated game time, opens every panel, and round-trips a save.
+- **Packaging** — builds the Electron app and launches it, checking it loads
+  the game, keeps Node out of the renderer, and can write a save.
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please)
+and driven by [Conventional Commits](https://www.conventionalcommits.org).
+Merging the open release pull request bumps the version, writes `CHANGELOG.md`,
+tags the commit, publishes a GitHub Release, and attaches the Windows, macOS and
+Linux builds along with the portable HTML file. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

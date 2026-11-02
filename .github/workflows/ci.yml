@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Every source file parses, the game's data tables agree with each other,
+      # and the portable bundle is genuinely self-contained. No browser needed.
+      - name: Run static checks
+        run: node test/static.mjs
+
+      - name: Build the portable single-file game
+        run: node build.js
+
+      - name: Upload the portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dominion-portable-html
+          path: dist/index.html
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Cache the Playwright browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Boots the portable build from disk, plays five minutes of simulated
+      # game time, opens every panel and round-trips a save.
+      - name: Run the smoke test
+        run: node test/smoke.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: test/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    name: Package (${{ matrix.os }})
+    # A pull request should prove the desktop app still builds, without paying
+    # for a full three-platform matrix on every push.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      # With devDependencies present this also validates the electron-builder
+      # config against its shipped schema, which the dependency-free job skips.
+      - name: Check the packaging config
+        run: node test/static.mjs
+
+      # --dir packs the app without producing installers: fast, and it still
+      # catches a broken main process or a bad electron-builder config.
+      - name: Package the desktop app (unpacked)
+        run: npm run dist:dir
+
+      # Launch the packaged app for real: it must load the bundled game, keep
+      # Node out of the renderer, and be able to write a save.
+      - name: Test the packaged app
+        run: xvfb-run -a --server-args="-screen 0 1400x900x24" node test/desktop.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-screenshots
+          path: test/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
