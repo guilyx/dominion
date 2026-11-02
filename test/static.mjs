@@ -214,6 +214,67 @@ if (!scheme) {
   });
 }
 
+// The one-line installers build asset names by hand, so they silently rot if a
+// packaging target or its naming changes. Tie them back to the build config.
+console.log('\nThe installers agree with the packaging config');
+{
+  const build = JSON.parse(read('package.json')).build;
+  const sh = read('install.sh');
+  const ps = read('install.ps1');
+
+  check('install.sh is valid POSIX shell', () => {
+    execFileSync('sh', ['-n', path.join(ROOT, 'install.sh')], { stdio: 'pipe' });
+  });
+
+  check('install.ps1 has a balanced structure', () => {
+    assert(ps.split('<#').length === ps.split('#>').length, 'unbalanced comment-help block');
+    const stripped = ps.replace(/<#[\s\S]*?#>/g, '').replace(/"(?:[^"`]|`.)*"/g, '""')
+      .replace(/'(?:[^']|'')*'/g, "''").replace(/#.*/g, '');
+    for (const [o, c, name] of [['{', '}', 'braces'], ['(', ')', 'parens'], ['[', ']', 'brackets']]) {
+      const n = stripped.split(o).length, m = stripped.split(c).length;
+      assert(n === m, `unbalanced ${name} (${n - 1} vs ${m - 1})`);
+    }
+  });
+
+  // electron-builder renames x64 per Linux target; everything else keeps its name.
+  const archName = (target, arch) => (target === 'AppImage' && arch === 'x64') ? 'x86_64'
+    : (target === 'deb' && arch === 'x64') ? 'amd64' : arch;
+  const targetsOf = (os) => (build[os] && build[os].target) || [];
+
+  check('install.sh offers every macOS archive the build produces', () => {
+    for (const t of targetsOf('mac')) {
+      if (t.target !== 'zip') continue;   // the script installs zips, not dmgs
+      for (const arch of t.arch) assert(sh.includes(`mac-${arch}.zip`), `install.sh never downloads mac-${arch}.zip`);
+    }
+  });
+
+  check('install.sh offers every Linux build it can install', () => {
+    for (const t of targetsOf('linux')) {
+      if (t.target !== 'AppImage') continue;  // deb needs a package manager, not this script
+      for (const arch of t.arch) {
+        const name = `linux-${archName('AppImage', arch)}.AppImage`;
+        assert(sh.includes(name), `install.sh never downloads ${name}`);
+      }
+    }
+  });
+
+  check('install.ps1 names the Windows artifacts the build produces', () => {
+    const expect = { nsis: build.nsis && build.nsis.artifactName, portable: build.portable && build.portable.artifactName };
+    for (const [target, tpl] of Object.entries(expect)) {
+      assert(tpl, `build.${target}.artifactName is not set, so its filename is unpredictable`);
+      // Turn the electron-builder template into what the script should contain.
+      const want = tpl.replace('${version}', '$Version').replace('${arch}', 'x64').replace('${ext}', 'exe');
+      assert(ps.includes(want), `install.ps1 never downloads ${want}`);
+    }
+  });
+
+  check('both installers point at this repository', () => {
+    const pkgRepo = JSON.parse(read('package.json')).repository.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+    assert(sh.includes(pkgRepo), `install.sh does not mention ${pkgRepo}`);
+    assert(ps.includes(pkgRepo), `install.ps1 does not mention ${pkgRepo}`);
+  });
+}
+
 console.log('\nThe portable build is self-contained');
 const out = path.join(ROOT, 'dist', 'test-bundle.html');
 execFileSync(process.execPath, [path.join(ROOT, 'build.js'), '--out', out], { stdio: 'pipe' });

@@ -11,8 +11,25 @@ no server: it is plain JavaScript on top of [Three.js](https://threejs.org) (ven
 
 ## Install and play
 
-Every release ships a desktop build for Windows, macOS and Linux, plus a single HTML file that
-runs anywhere. Grab one from the [latest release](https://github.com/guilyx/baw/releases/latest).
+**macOS and Linux**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guilyx/baw/main/install.sh | sh
+```
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/guilyx/baw/main/install.ps1 | iex
+```
+
+That picks the right build for your machine, installs it, and on macOS clears the download
+quarantine for you so the first launch is not blocked. Add `| sh -s -- --dry-run` (or
+`-DryRun` on Windows) to see what it would do without touching anything.
+
+Prefer to do it by hand, or want the no-install version? Every release ships a desktop build for
+Windows, macOS and Linux, plus a single HTML file that runs anywhere — take one from the
+[latest release](https://github.com/guilyx/baw/releases/latest) and follow the steps below.
 
 The desktop builds are **not code-signed**, so each system will warn you the first time. The steps
 below are the normal way to accept an unsigned app; they are only needed once.
@@ -316,6 +333,8 @@ src/hand.js     the divine hand and targeting modes
 src/ui.js       HUD, tabs, overlays
 src/game.js     bootstrap, land generation, main loop, campaign flow
 build.js        bundles everything into dist/index.html
+install.sh      one-line installer for macOS and Linux
+install.ps1     one-line installer for Windows
 
 desktop/main.js Electron shell for the packaged desktop app
 tools/serve.js  dependency-free static server behind `npm start`
