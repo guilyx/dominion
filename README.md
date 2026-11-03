@@ -335,6 +335,7 @@ src/game.js     bootstrap, land generation, main loop, campaign flow
 build.js        bundles everything into dist/index.html
 install.sh      one-line installer for macOS and Linux
 install.ps1     one-line installer for Windows
+scripts/release/bump.mjs  bumps the version and dates the changelog for a release
 
 desktop/main.js Electron shell for the packaged desktop app
 tools/serve.js  dependency-free static server behind `npm start`
@@ -357,16 +358,15 @@ Every pull request runs three jobs:
 - **Packaging** — builds the Electron app and launches it, checking it loads
   the game, keeps Node out of the renderer, and can write a save.
 
-Releases are automated with [release-please](https://github.com/googleapis/release-please)
-and driven by [Conventional Commits](https://www.conventionalcommits.org).
-Merging the open release pull request bumps the version, writes `CHANGELOG.md`,
-tags the commit, publishes a GitHub Release, and attaches the Windows, macOS and
-Linux builds along with the portable HTML file.
+Releases need no approval and no release pull request. Every pull request carries
+one label saying what merging it ships — `release:patch`, `release:minor`,
+`release:major` or `release:none` — and merging a versioned one bumps
+`package.json`, dates the `[Unreleased]` entries in `CHANGELOG.md`, commits and
+tags that on `main`, builds all the binaries, and publishes the GitHub release
+with those changelog entries as its notes.
 
-This needs one repository setting enabled once — **Settings → Actions → General
-→ Workflow permissions → Allow GitHub Actions to create and approve pull
-requests** — otherwise release-please cannot open its pull request. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+A release can also be cut by running the Release workflow by hand, or by pushing
+a `v*` tag. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

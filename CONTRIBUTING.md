@@ -37,30 +37,25 @@ twice, a worker slot table that does not match the upgrade levels, an unlock
 that nothing defines, and a bundle that failed to inline a source file. If you
 add a data table, add the invariant with it.
 
-## Commit messages drive releases
+## Pull requests say what they release
 
-The project uses [Conventional Commits](https://www.conventionalcommits.org).
-[release-please](https://github.com/googleapis/release-please) reads them, keeps
-a release pull request up to date, and on merge bumps the version, writes
-`CHANGELOG.md`, tags the commit and publishes a GitHub Release with the desktop
-binaries attached.
+Every pull request carries exactly one label, and CI fails without it:
 
-| Prefix | Effect | Example |
-| --- | --- | --- |
-| `feat:` | minor bump, listed under Features | `feat: add a harbour and fishers` |
-| `fix:` | patch bump, listed under Fixes | `fix: stop the build menu overflowing` |
-| `perf:` | patch bump, listed under Performance | `perf: cache adjacency for two seconds` |
-| `balance:` | patch bump, listed under Game balance | `balance: slow early births` |
-| `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:` | no release | `docs: explain the ages` |
+| Label | On merge |
+| --- | --- |
+| `release:patch` | cuts x.y.**z+1** |
+| `release:minor` | cuts x.**y+1**.0 |
+| `release:major` | cuts **x+1**.0.0 |
+| `release:none` | ships nothing — docs, CI, refactors |
 
-A breaking change is a `!` after the type, or a `BREAKING CHANGE:` footer, and
-causes a major bump:
+The labels create themselves the first time the check runs, so there is nothing
+to set up in the repository.
 
-```
-feat!: drop saves written before the ages update
-```
+If the label cuts a version, put what changed under `## [Unreleased]` in
+`CHANGELOG.md` in the same pull request. The release refuses to run when that
+section is empty, so a release always has notes.
 
-Anything that invalidates existing saves is a breaking change.
+Anything that invalidates existing saves is a `release:major`.
 
 ## House style
 
@@ -75,22 +70,28 @@ Anything that invalidates existing saves is a breaking change.
 
 ## Releasing
 
-Maintainers do not tag by hand. Merging the open release pull request does
-everything. To rebuild binaries for an existing tag, run the **Release**
-workflow manually and give it the tag; running it with no tag just builds the
-binaries as workflow artifacts, which is a cheap way to check the matrix still
-works.
+Nobody tags by hand, and nothing waits for an approval. Merging a pull request
+labelled `release:patch`, `release:minor` or `release:major` makes the Release
+workflow:
 
-### One-time repository setup
+1. bump the version in `package.json` and `package-lock.json`;
+2. date the `[Unreleased]` changelog entries as the new version;
+3. commit and tag that on `main`;
+4. build the Windows, macOS and Linux binaries plus the portable HTML file;
+5. publish the GitHub release with the changelog section as its notes.
 
-release-please opens its release pull request as GitHub Actions, which a
-repository forbids by default. Without this it still computes the version and
-pushes its branch, then fails with *"GitHub Actions is not permitted to create
-or approve pull requests"*.
+The push in step 3 uses the workflow token, which does not start the workflow
+again.
 
-Enable it once, in **Settings → Actions → General → Workflow permissions**:
+Two other ways in, both from the Actions tab:
 
-- [x] Allow GitHub Actions to create and approve pull requests
+- **Run the Release workflow by hand** and pick the part to bump, or give it an
+  exact version. Useful for the first release, or to re-cut one.
+- **Push a `v*` tag yourself**: that tag is built and released as it is, with no
+  bump commit.
 
-Workflow permissions themselves are set per workflow in this repository, so the
-read/write radio button above that checkbox can stay on the restricted default.
+To rebuild the binaries for a tag that is already released, run the workflow
+with that tag — publishing is idempotent and replaces the attached files.
+
+`node scripts/release/bump.mjs minor` does step 1 and 2 locally if you want to
+see what a release would look like before merging.

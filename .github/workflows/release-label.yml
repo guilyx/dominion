@@ -1,0 +1,52 @@
+name: Release label
+
+# Every pull request says what merging it releases, with exactly one label:
+# release:major, release:minor or release:patch to ship a new version on merge (see
+# release.yml), or release:none for changes that do not need one (docs, CI, refactors).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: One release label
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write        # creating the labels below, nothing else
+    steps:
+      # Create the four labels the first time this runs, so the repository needs
+      # no manual setup and the dropdown offers them. A no-op afterwards, and
+      # harmless on a fork pull request, where the token cannot write.
+      - name: Make sure the release labels exist
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -u
+          create() { gh label create "$1" --color "$2" --description "$3" 2>/dev/null \
+            && echo "created $1" || echo "$1 already exists (or cannot be created here)"; }
+          create 'release:major' 'B60205' 'Merging this cuts x+1.0.0'
+          create 'release:minor' '0E8A16' 'Merging this cuts x.y+1.0'
+          create 'release:patch' '1D76DB' 'Merging this cuts x.y.z+1'
+          create 'release:none'  'C5DEF5' 'Merging this releases nothing'
+
+      - name: Check the pull request carries exactly one
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          found=""
+          for label in $LABELS; do
+            case "$label" in release:major|release:minor|release:patch|release:none) found="$found $label" ;; esac
+          done
+          count=$(echo $found | wc -w)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Add exactly one of release:major, release:minor, release:patch, release:none (found:${found:- none})."
+            exit 1
+          fi
+          echo "merging this pull request releases:${found}"

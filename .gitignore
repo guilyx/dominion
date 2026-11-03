@@ -1,5 +1,6 @@
 dist/
 node_modules/
-release/
+# Anchored: electron-builder's output directory only, not scripts/release/.
+/release/
 test/screenshots/
 .DS_Store

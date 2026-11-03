@@ -1,7 +1,8 @@
 // Static checks: every source file parses, the game's data tables agree with
 // each other, and the bundler produces a genuinely self-contained page.
 // No browser needed, so this runs in a second and gates every pull request.
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -216,6 +217,93 @@ if (!scheme) {
 
 // The one-line installers build asset names by hand, so they silently rot if a
 // packaging target or its naming changes. Tie them back to the build config.
+// Releases are cut by a script, not by hand, so the script and the changelog it
+// edits have to stay in step with package.json.
+console.log('\nThe release machinery works');
+{
+  const clPath = path.join(ROOT, 'CHANGELOG.md');
+  const changelog = readFileSync(clPath, 'utf8');
+  const pkg = JSON.parse(read('package.json'));
+
+  check('the changelog has an [Unreleased] section', () => {
+    assert(changelog.includes('## [Unreleased]\n'), 'CHANGELOG.md has no "## [Unreleased]" heading');
+  });
+
+  check('the changelog has a link for [Unreleased]', () => {
+    assert(/^\[Unreleased\]: \S+$/m.test(changelog), 'no "[Unreleased]: <url>" link definition, so the bump script cannot update it');
+  });
+
+  check('the lockfile version matches package.json', () => {
+    const lock = JSON.parse(read('package-lock.json'));
+    eq(lock.version, pkg.version, 'package-lock.json root version');
+    eq(lock.packages[''].version, pkg.version, 'package-lock.json packages[""] version');
+  });
+
+  // Run the real bump against throwaway copies: it must move all three files
+  // together and leave the changelog parseable.
+  check('a release can actually be cut', () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'dominion-bump-'));
+    try {
+      mkdirSync(path.join(tmp, 'scripts', 'release'), { recursive: true });
+      for (const f of ['package.json', 'package-lock.json', 'CHANGELOG.md']) copyFileSync(path.join(ROOT, f), path.join(tmp, f));
+      copyFileSync(path.join(ROOT, 'scripts', 'release', 'bump.mjs'), path.join(tmp, 'scripts', 'release', 'bump.mjs'));
+
+      const out = execFileSync(process.execPath, ['scripts/release/bump.mjs', 'minor', '--date', '2026-01-31'],
+        { cwd: tmp, encoding: 'utf8' }).trim();
+      const [maj, min] = pkg.version.split('.').map(Number);
+      eq(out, `${maj}.${min + 1}.0`, 'the printed version');
+
+      const after = JSON.parse(readFileSync(path.join(tmp, 'package.json'), 'utf8'));
+      eq(after.version, out, 'package.json was not bumped to');
+      const lockAfter = JSON.parse(readFileSync(path.join(tmp, 'package-lock.json'), 'utf8'));
+      eq(lockAfter.version, out, 'the lockfile was not bumped to');
+      eq(lockAfter.packages[''].version, out, 'the lockfile package entry was not bumped to');
+
+      const clAfter = readFileSync(path.join(tmp, 'CHANGELOG.md'), 'utf8');
+      assert(clAfter.includes(`## [${out}] - 2026-01-31`), 'the changelog has no dated section for the new version');
+      assert(clAfter.includes('## [Unreleased]\n'), 'the changelog lost its [Unreleased] section');
+      assert(new RegExp(`^\\[${out.replace(/\./g, '\\.')}\\]: \\S+$`, 'm').test(clAfter), 'the changelog has no link for the new version');
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  check('it refuses to cut an empty release', () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'dominion-empty-'));
+    try {
+      mkdirSync(path.join(tmp, 'scripts', 'release'), { recursive: true });
+      for (const f of ['package.json', 'package-lock.json']) copyFileSync(path.join(ROOT, f), path.join(tmp, f));
+      copyFileSync(path.join(ROOT, 'scripts', 'release', 'bump.mjs'), path.join(tmp, 'scripts', 'release', 'bump.mjs'));
+      writeFileSync(path.join(tmp, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n## [0.0.1] - 2020-01-01\n\n- old\n\n[Unreleased]: https://example.com/compare/v0.0.1...HEAD\n');
+      let threw = false;
+      try { execFileSync(process.execPath, ['scripts/release/bump.mjs', 'patch'], { cwd: tmp, stdio: 'pipe' }); }
+      catch { threw = true; }
+      assert(threw, 'the bump script cut a release with nothing under [Unreleased]');
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  check('every file the release needs is actually tracked by git', () => {
+    // `release/` in .gitignore once matched scripts/release/ too, so the bump
+    // script was silently never committed.
+    const needed = ['scripts/release/bump.mjs', 'CHANGELOG.md', '.github/workflows/release.yml', '.github/workflows/release-label.yml', 'install.sh', 'install.ps1'];
+    for (const f of needed) {
+      assert(existsSync(path.join(ROOT, f)), `${f} is missing`);
+      let ignored = false;
+      try { execFileSync('git', ['check-ignore', '-q', f], { cwd: ROOT, stdio: 'pipe' }); ignored = true; } catch { /* not ignored */ }
+      assert(!ignored, `${f} is in .gitignore, so it would never reach the repository`);
+    }
+  });
+
+  check('the release workflow accepts the labels the label check requires', () => {
+    const rel = read('.github/workflows/release.yml');
+    const lab = read('.github/workflows/release-label.yml');
+    for (const part of ['major', 'minor', 'patch']) {
+      assert(rel.includes(part), `release.yml never mentions "${part}"`);
+      assert(lab.includes(`release:${part}`), `release-label.yml does not accept release:${part}`);
+    }
+    assert(lab.includes('release:none'), 'release-label.yml has no release:none for changes that ship nothing');
+    assert(!existsSync(path.join(ROOT, 'release-please-config.json')), 'release-please config is still present alongside the label-driven release');
+  });
+}
+
 console.log('\nThe installers agree with the packaging config');
 {
   const build = JSON.parse(read('package.json')).build;
