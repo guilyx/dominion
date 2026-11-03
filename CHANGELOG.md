@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-03
+
 ### Added
 
 - A project site, published to GitHub Pages: a landing page, a how-to-play guide and
@@ -58,5 +60,6 @@ All notable changes to this project are documented here. The format follows
 - The Windows installer and portable build no longer write to the same filename.
 - The package licence matches `LICENSE` (Apache-2.0).
 
-[Unreleased]: https://github.com/guilyx/dominion/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/guilyx/dominion/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/guilyx/dominion/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/guilyx/dominion/releases/tag/v1.1.0
