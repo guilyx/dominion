@@ -199,13 +199,13 @@ jobs:
             echo '**macOS and Linux**'
             echo
             echo '```sh'
-            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/baw/main/install.sh | sh'
+            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh'
             echo '```'
             echo
             echo '**Windows** (PowerShell)'
             echo
             echo '```powershell'
-            echo 'irm https://raw.githubusercontent.com/guilyx/baw/main/install.ps1 | iex'
+            echo 'irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex'
             echo '```'
             echo
             # Single quotes: backticks inside double quotes would run as a command.

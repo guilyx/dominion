@@ -3,7 +3,7 @@
   Dominion installer for Windows.
 
 .DESCRIPTION
-  irm https://raw.githubusercontent.com/guilyx/baw/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex
 
   Downloads the latest release and runs the installer silently. It installs for
   the current user, so no administrator rights are needed. The app is not
@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Repo = 'guilyx/baw'
+$Repo = 'guilyx/black_and_white'
 
 if ([Environment]::Is64BitOperatingSystem -eq $false) {
   throw "Dominion needs a 64-bit version of Windows. Use the portable HTML file from https://github.com/$Repo/releases/latest instead."

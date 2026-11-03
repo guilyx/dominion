@@ -14,13 +14,13 @@ no server: it is plain JavaScript on top of [Three.js](https://threejs.org) (ven
 **macOS and Linux**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guilyx/baw/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh
 ```
 
 **Windows** (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/guilyx/baw/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex
 ```
 
 That picks the right build for your machine, installs it, and on macOS clears the download
@@ -29,7 +29,7 @@ quarantine for you so the first launch is not blocked. Add `| sh -s -- --dry-run
 
 Prefer to do it by hand, or want the no-install version? Every release ships a desktop build for
 Windows, macOS and Linux, plus a single HTML file that runs anywhere — take one from the
-[latest release](https://github.com/guilyx/baw/releases/latest) and follow the steps below.
+[latest release](https://github.com/guilyx/black_and_white/releases/latest) and follow the steps below.
 
 The desktop builds are **not code-signed**, so each system will warn you the first time. The steps
 below are the normal way to accept an unsigned app; they are only needed once.
@@ -88,7 +88,7 @@ separate.
 Needs [Node.js](https://nodejs.org) 18 or newer, and nothing else.
 
 ```sh
-git clone https://github.com/guilyx/baw.git
+git clone https://github.com/guilyx/black_and_white.git
 cd baw
 npm start          # serves the game and opens a browser
 ```

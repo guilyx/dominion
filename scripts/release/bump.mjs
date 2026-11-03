@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const REPO_URL = 'https://github.com/guilyx/baw';
+const REPO_URL = 'https://github.com/guilyx/black_and_white';
 const PARTS = ['major', 'minor', 'patch'];
 
 const die = (msg) => { console.error(`bump: ${msg}`); process.exit(1); };
