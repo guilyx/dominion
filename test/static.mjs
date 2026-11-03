@@ -393,5 +393,37 @@ check('the bundle is a plausible size', () => {
   assert(bundle.length > 400_000, `bundle is only ${bundle.length} bytes — something did not inline`);
 });
 
+
+// ---------------------------------------------------------------------------
+// The Pages workflow only rebuilds the site when a path in its filter changes.
+// Anything the playable page is built from has to be in that list, or /play/
+// quietly serves a stale build until something unrelated happens to touch it.
+console.log('\nThe Pages workflow rebuilds when the game changes');
+{
+  const wf = read('.github/workflows/pages.yml');
+  const filter = (wf.match(/paths:\n((?:\s+- '[^']+'\n|\s+#[^\n]*\n)+)/) || [, ''])[1];
+  const globs = [...filter.matchAll(/- '([^']+)'/g)].map((m) => m[1]);
+  const covered = (p) => globs.some((g) => (g.endsWith('/**') ? p.startsWith(g.slice(0, -2)) : g === p));
+
+  check('the filter was parsed at all', () => assert(globs.length > 3, `only found ${globs.length} paths — the regex no longer matches`));
+
+  // Everything index.html pulls in, which is exactly what the bundler inlines.
+  const srcs = [...read('index.html').matchAll(/\s(?:src|href)="(?!https?:)([^"]+)"/g)].map((m) => m[1]);
+  check('every file the game loads is covered', () => {
+    assert(srcs.length > 10, `index.html only references ${srcs.length} local files — parsing went wrong`);
+    const missing = srcs.filter((s) => !covered(s));
+    assert(!missing.length, `a change to these would not republish the site: ${missing.join(', ')}`);
+  });
+
+  check('the version stamp and the bundler are covered', () => {
+    for (const p of ['package.json', 'build.js', 'index.html'])
+      assert(covered(p), `${p} is missing from the filter, so /play/ could go stale`);
+  });
+
+  check('the site sources are covered', () => {
+    assert(covered('site/index.html'), 'site/** is missing from the filter');
+  });
+}
+
 console.log(failures ? `\n${failures} check(s) failed\n` : '\nAll static checks passed\n');
 process.exit(failures ? 1 : 0);

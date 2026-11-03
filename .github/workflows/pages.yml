@@ -14,6 +14,10 @@ on:
       - 'style.css'
       - 'vendor/**'
       - 'build.js'
+      # A release bumps the version here, and the playable page is stamped with
+      # it. Without this, /play/ would keep advertising the previous release
+      # until some unrelated change happened to touch the game.
+      - 'package.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

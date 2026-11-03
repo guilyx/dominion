@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Pages workflow now rebuilds when `package.json` changes. A release bumps the version
+  there and the playable page is stamped with it, so without this `/play/` kept advertising
+  the previous release until an unrelated change happened to touch the game. A static check
+  now fails if anything `index.html` loads is missing from that path filter.
+
 ## [1.2.0] - 2026-11-03
 
 ### Added
