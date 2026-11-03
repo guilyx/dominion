@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A release now republishes the site, so `/play/` serves the version that was just cut.
+  The release workflow pushes the version bump with the workflow token, and GitHub never
+  starts a workflow from such a push, so the Pages workflow was never reaching the bump at
+  all — the path filter was beside the point. A `workflow_run` trigger on the Release
+  workflow is what actually does it, and a static check now fails if that trigger goes
+  missing or stops pointing at Release.
+
 ## [1.2.1] - 2026-11-03
 
 ### Fixed

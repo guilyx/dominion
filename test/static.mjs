@@ -423,6 +423,17 @@ console.log('\nThe Pages workflow rebuilds when the game changes');
   check('the site sources are covered', () => {
     assert(covered('site/index.html'), 'site/** is missing from the filter');
   });
+
+  // The paths filter alone cannot catch a release. The release workflow pushes
+  // the version bump with the workflow token, and GitHub never starts a
+  // workflow from such a push, so no `push` event is ever delivered for it.
+  // The workflow_run trigger is what actually republishes /play/ after a
+  // release; without it the live page silently serves the previous version.
+  check('a finished release republishes the site', () => {
+    const run = (wf.match(/\n  workflow_run:\n((?:\s{4}\S[^\n]*\n)+)/) || [, ''])[1];
+    assert(run, 'pages.yml has no workflow_run trigger, so a release bump would never republish /play/');
+    assert(/workflows:\s*\[?[^\n]*Release/.test(run), 'the workflow_run trigger does not listen to the Release workflow');
+  });
 }
 
 console.log(failures ? `\n${failures} check(s) failed\n` : '\nAll static checks passed\n');
