@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-03
+
 ### Added
 
 - Desktop builds for Windows, macOS and Linux: an NSIS installer and a portable `.exe`,
@@ -47,4 +49,5 @@ All notable changes to this project are documented here. The format follows
 - The Windows installer and portable build no longer write to the same filename.
 - The package licence matches `LICENSE` (Apache-2.0).
 
-[Unreleased]: https://github.com/guilyx/black_and_white/commits/main
+[Unreleased]: https://github.com/guilyx/black_and_white/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/guilyx/black_and_white/releases/tag/v1.1.0
