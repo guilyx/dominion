@@ -14,11 +14,23 @@ on:
       - 'style.css'
       - 'vendor/**'
       - 'build.js'
-      # A release bumps the version here, and the playable page is stamped with
-      # it. Without this, /play/ would keep advertising the previous release
-      # until some unrelated change happened to touch the game.
+      # The version lives here and the playable page is stamped with it, so a
+      # hand-pushed version change should republish. A release bump does not
+      # arrive this way — see workflow_run below.
       - 'package.json'
       - '.github/workflows/pages.yml'
+
+  # A release bumps package.json and pushes it with the workflow token, and
+  # GitHub deliberately never starts a workflow from such a push (it is how it
+  # stops workflows triggering each other forever). So no paths filter can
+  # catch a release; the push event simply never happens. workflow_run is the
+  # way round it: when Release finishes, republish so /play/ serves the version
+  # that was just cut instead of the one before it.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+
   workflow_dispatch:
 
 permissions:
@@ -33,6 +45,8 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-latest
+    # A failed release has nothing worth republishing. Any other trigger runs.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
