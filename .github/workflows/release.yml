@@ -1,44 +1,113 @@
 name: Release
 
+# A release starts in one of three ways:
+# - a pull request merges into main carrying a release:patch, release:minor or
+#   release:major label: the version is bumped, the [Unreleased] changelog entries are
+#   dated, and the result is committed to main and tagged;
+# - a v* tag is pushed by hand: that tag is released as it is;
+# - this workflow is run by hand from the Actions tab, with the part to bump.
+# Nothing here opens a pull request, so no release waits on an approval.
+
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Attach the binaries to this existing release tag (leave empty to only build artifacts)'
-        required: false
+      bump:
+        description: Part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+      version:
+        description: Exact version to release instead (optional, e.g. 2.0.0)
         type: string
+        required: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  # Keeps a release pull request up to date from conventional commits. Merging
-  # it bumps the version, writes CHANGELOG.md, tags and publishes the release.
-  release-please:
-    name: Release PR
+  plan:
+    name: Decide what to release
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
+      bump: ${{ steps.plan.outputs.bump }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
-      - uses: googleapis/release-please-action@v4
-        id: release
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_BUMP: ${{ inputs.bump }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          # A pushed tag is released as it is.
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
+            echo "bump=${DISPATCH_BUMP}" >> "$GITHUB_OUTPUT"
+            echo "version=${DISPATCH_VERSION}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Otherwise: what did the pull request this commit came from ask for?
+          labels="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0].labels[].name' 2>/dev/null || true)"
+          bump=""
+          for part in major minor patch; do
+            if printf '%s\n' "$labels" | grep -qx "release:${part}"; then bump="$part"; break; fi
+          done
+          echo "labels on the merged pull request: ${labels:-none}; release: ${bump:-none}"
+          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
 
-  # The binaries are built in the same workflow as the release on purpose: a
-  # release published by GITHUB_TOKEN does not trigger a separate workflow.
+  bump:
+    name: Bump, commit and tag
+    needs: plan
+    if: needs.plan.outputs.bump != '' || needs.plan.outputs.version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - id: bump
+        env:
+          PART: ${{ needs.plan.outputs.bump }}
+          EXACT: ${{ needs.plan.outputs.version }}
+        run: |
+          if [ -n "$EXACT" ]; then
+            version="$(node scripts/release/bump.mjs --version "$EXACT")"
+          else
+            version="$(node scripts/release/bump.mjs "$PART")"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Release v${version}"
+          git tag -a "v${version}" -m "Dominion ${version}"
+          # Pushed with the workflow token, so neither push starts this workflow again.
+          git push origin HEAD:main "v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
   binaries:
     name: ${{ matrix.name }}
-    needs: [release-please]
-    # `always()` so a manual run (where release-please is skipped) still builds.
-    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [plan, bump]
+    if: ${{ !cancelled() && (needs.plan.outputs.tag != '' || needs.bump.result == 'success') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -53,13 +122,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.release-please.outputs.tag_name || github.ref }}
-
+          ref: ${{ needs.plan.outputs.tag || needs.bump.outputs.tag }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-
       - run: npm ci --no-audit --no-fund
 
       - name: Build the desktop binaries
@@ -89,17 +156,75 @@ jobs:
             -exec cp {} upload/ \;
           ls -lh upload
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: dominion-${{ matrix.os }}
           path: upload/
           if-no-files-found: error
 
-      - name: Attach the binaries to the release
-        if: needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
-        run: gh release upload "$TAG" upload/* --clobber
+  github:
+    name: Publish the GitHub release
+    needs: [plan, bump, binaries]
+    if: ${{ !cancelled() && needs.binaries.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag || needs.bump.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.tag || needs.bump.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dominion-*
+          merge-multiple: true
+          path: dist-release/
+
+      - name: Write the release notes from the changelog
+        run: |
+          version="${TAG#v}"
+          # Stop at the next release heading, or at the link definitions at the
+          # bottom, which otherwise land in the notes of the oldest release.
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          {
+            echo
+            echo '## Install'
+            echo
+            echo '**macOS and Linux**'
+            echo
+            echo '```sh'
+            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh'
+            echo '```'
+            echo
+            echo '**Windows** (PowerShell)'
+            echo
+            echo '```powershell'
+            echo 'irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex'
+            echo '```'
+            echo
+            # Single quotes: backticks inside double quotes would run as a command.
+            echo 'Or take a file below. The `-portable.html` one is the whole game in'
+            echo 'a single page: no install, no network.'
+          } >> release-notes.md
+          cat release-notes.md
+
+      - name: Publish
+        run: |
+          ls -lh dist-release/
+          # Idempotent, so re-running the workflow for a tag refreshes the release
+          # instead of failing on one that already exists.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Dominion ${TAG#v}" --notes-file release-notes.md
+            gh release upload "$TAG" dist-release/* --clobber
+          else
+            gh release create "$TAG" \
+              --title "Dominion ${TAG#v}" \
+              --notes-file release-notes.md \
+              dist-release/*
+          fi

@@ -14,13 +14,13 @@ no server: it is plain JavaScript on top of [Three.js](https://threejs.org) (ven
 **macOS and Linux**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guilyx/baw/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh
 ```
 
 **Windows** (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/guilyx/baw/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex
 ```
 
 That picks the right build for your machine, installs it, and on macOS clears the download
@@ -29,7 +29,7 @@ quarantine for you so the first launch is not blocked. Add `| sh -s -- --dry-run
 
 Prefer to do it by hand, or want the no-install version? Every release ships a desktop build for
 Windows, macOS and Linux, plus a single HTML file that runs anywhere — take one from the
-[latest release](https://github.com/guilyx/baw/releases/latest) and follow the steps below.
+[latest release](https://github.com/guilyx/black_and_white/releases/latest) and follow the steps below.
 
 The desktop builds are **not code-signed**, so each system will warn you the first time. The steps
 below are the normal way to accept an unsigned app; they are only needed once.
@@ -88,7 +88,7 @@ separate.
 Needs [Node.js](https://nodejs.org) 18 or newer, and nothing else.
 
 ```sh
-git clone https://github.com/guilyx/baw.git
+git clone https://github.com/guilyx/black_and_white.git
 cd baw
 npm start          # serves the game and opens a browser
 ```
@@ -335,6 +335,7 @@ src/game.js     bootstrap, land generation, main loop, campaign flow
 build.js        bundles everything into dist/index.html
 install.sh      one-line installer for macOS and Linux
 install.ps1     one-line installer for Windows
+scripts/release/bump.mjs  bumps the version and dates the changelog for a release
 
 desktop/main.js Electron shell for the packaged desktop app
 tools/serve.js  dependency-free static server behind `npm start`
@@ -357,16 +358,15 @@ Every pull request runs three jobs:
 - **Packaging** — builds the Electron app and launches it, checking it loads
   the game, keeps Node out of the renderer, and can write a save.
 
-Releases are automated with [release-please](https://github.com/googleapis/release-please)
-and driven by [Conventional Commits](https://www.conventionalcommits.org).
-Merging the open release pull request bumps the version, writes `CHANGELOG.md`,
-tags the commit, publishes a GitHub Release, and attaches the Windows, macOS and
-Linux builds along with the portable HTML file.
+Releases need no approval and no release pull request. Every pull request carries
+one label saying what merging it ships — `release:patch`, `release:minor`,
+`release:major` or `release:none` — and merging a versioned one bumps
+`package.json`, dates the `[Unreleased]` entries in `CHANGELOG.md`, commits and
+tags that on `main`, builds all the binaries, and publishes the GitHub release
+with those changelog entries as its notes.
 
-This needs one repository setting enabled once — **Settings → Actions → General
-→ Workflow permissions → Allow GitHub Actions to create and approve pull
-requests** — otherwise release-please cannot open its pull request. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+A release can also be cut by running the Release workflow by hand, or by pushing
+a `v*` tag. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

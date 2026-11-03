@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "A browser god game: raise a tribe through the ages, train a creature, and win the island by awe or by war.",
-  "homepage": "https://github.com/guilyx/baw",
+  "homepage": "https://github.com/guilyx/black_and_white",
   "license": "Apache-2.0",
   "author": {
     "name": "guilyx",
@@ -14,7 +14,7 @@
   "desktopName": "dominion.desktop",
   "repository": {
     "type": "git",
-    "url": "https://github.com/guilyx/baw.git"
+    "url": "https://github.com/guilyx/black_and_white.git"
   },
   "engines": {
     "node": ">=18"
