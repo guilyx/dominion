@@ -9,6 +9,8 @@ your temple, your hand and your creature change to match.
 Everything is original code and procedural art. There are no external assets, no build step and
 no server: it is plain JavaScript on top of [Three.js](https://threejs.org) (vendored, MIT).
 
+**[Play it in your browser](https://guilyx.github.io/dominion/play/)** · [How to play](https://guilyx.github.io/dominion/guide.html) · [Architecture notes](https://guilyx.github.io/dominion/architecture.html)
+
 ## Install and play
 
 **macOS and Linux**
