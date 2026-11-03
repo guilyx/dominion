@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write        # creating the labels below, nothing else
+      issues: write          # creating the labels below, nothing else
+      pull-requests: read    # reading the labels actually on the pull request now
     steps:
       # Create the four labels the first time this runs, so the repository needs
       # no manual setup and the dropdown offers them. A no-op afterwards, and
@@ -36,10 +37,16 @@ jobs:
           create 'release:patch' '1D76DB' 'Merging this cuts x.y.z+1'
           create 'release:none'  'C5DEF5' 'Merging this releases nothing'
 
+      # Read the labels from the API, not from github.event.pull_request.labels:
+      # that is a snapshot taken when the event was queued, so a push delivered
+      # after a label was added still reports the pull request as unlabelled.
       - name: Check the pull request carries exactly one
         env:
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
+          LABELS="$(gh api "repos/${GH_REPO}/issues/${PR}/labels" --jq '.[].name' | tr '\n' ' ')"
           found=""
           for label in $LABELS; do
             case "$label" in release:major|release:minor|release:patch|release:none) found="$found $label" ;; esac
