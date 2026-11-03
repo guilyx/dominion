@@ -77,7 +77,7 @@ function buildMenu() {
       label: 'Help',
       submenu: [
         { label: 'Controls (press H in game)', enabled: false },
-        { label: 'Project page', click: () => shell.openExternal('https://github.com/guilyx/black_and_white') },
+        { label: 'Project page', click: () => shell.openExternal('https://github.com/guilyx/dominion') },
         { label: `Version ${app.getVersion()}`, enabled: false },
       ],
     },

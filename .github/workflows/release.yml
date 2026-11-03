@@ -23,6 +23,10 @@ on:
         description: Exact version to release instead (optional, e.g. 2.0.0)
         type: string
         required: false
+      tag:
+        description: Rebuild and republish an existing tag instead (optional, e.g. v1.1.0)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -48,6 +52,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_BUMP: ${{ inputs.bump }}
           DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_TAG: ${{ inputs.tag }}
         run: |
           # A pushed tag is released as it is.
           if [ "${GITHUB_REF_TYPE}" = tag ]; then
@@ -55,6 +60,11 @@ jobs:
             exit 0
           fi
           if [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
+            # An existing tag: rebuild and republish it, bumping nothing.
+            if [ -n "${DISPATCH_TAG}" ]; then
+              echo "tag=${DISPATCH_TAG}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "bump=${DISPATCH_BUMP}" >> "$GITHUB_OUTPUT"
             echo "version=${DISPATCH_VERSION}" >> "$GITHUB_OUTPUT"
             exit 0
@@ -199,13 +209,13 @@ jobs:
             echo '**macOS and Linux**'
             echo
             echo '```sh'
-            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh'
+            echo 'curl -fsSL https://raw.githubusercontent.com/guilyx/dominion/main/install.sh | sh'
             echo '```'
             echo
             echo '**Windows** (PowerShell)'
             echo
             echo '```powershell'
-            echo 'irm https://raw.githubusercontent.com/guilyx/black_and_white/main/install.ps1 | iex'
+            echo 'irm https://raw.githubusercontent.com/guilyx/dominion/main/install.ps1 | iex'
             echo '```'
             echo
             # Single quotes: backticks inside double quotes would run as a command.
