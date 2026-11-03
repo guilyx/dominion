@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A project site, published to GitHub Pages: a landing page, a how-to-play guide and
+  architecture notes, with the game itself playable at `/play/` from the same single-file
+  build that ships on the releases page.
+- `tools/check-site-links.mjs`, which fails the build if a site link, in-page anchor or
+  screenshot does not resolve, or if a screenshot is never referenced by any page. CI
+  assembles the site and runs it on every pull request.
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

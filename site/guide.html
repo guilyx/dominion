@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to play — Dominion</title>
+<meta name="description" content="Controls, your first ten minutes, and how every system in Dominion works: villagers, skills, ages, adjacency, miracles, your creature, and winning a land.">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./">DOMINION</a>
+    <nav>
+      <a href="play/">Play</a>
+      <a href="guide.html" aria-current="page">How to play</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/guilyx/dominion">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="tight">
+    <h1 style="font-size:36px;letter-spacing:.08em;color:var(--gold);margin:28px 0 8px">How to play</h1>
+    <p class="lede narrow">You are a god with a hand and no direct control. Everything below is about
+      nudging a town that is already trying to look after itself.</p>
+  </section>
+
+  <div class="toc">
+    <ol>
+      <li><a href="#first">Your first ten minutes</a></li>
+      <li><a href="#controls">Controls</a></li>
+      <li><a href="#villagers">Villagers and jobs</a></li>
+      <li><a href="#skills">Skills and Legends</a></li>
+      <li><a href="#building">Building and adjacency</a></li>
+      <li><a href="#ages">Ages and Insight</a></li>
+      <li><a href="#economy">The economy</a></li>
+      <li><a href="#prayer">Prayer, miracles and alignment</a></li>
+      <li><a href="#creature">Your creature</a></li>
+      <li><a href="#winning">Winning a land</a></li>
+      <li><a href="#world">Weather, seasons and the world</a></li>
+      <li><a href="#saves">Saves and settings</a></li>
+    </ol>
+  </div>
+
+  <figure class="shot"><img src="img/menu.jpg" alt="The main menu, with five creatures to choose from and controls for seed, map size and number of rival tribes" loading="lazy"></figure>
+  <figcaption>Pick a creature before you start — it changes what your companion is naturally good at, and
+    it is the one choice you cannot change later. The seed, map size and number of rival tribes are
+    yours to set too.</figcaption>
+
+  <section id="first">
+    <h2>Your first ten minutes</h2>
+    <ol>
+      <li><b>Feed them.</b> Click a villager to pick them up, then drop them on a field. They become a
+        farmer. Do this two or three times. Food is the thing that kills a young town.</li>
+      <li><b>House them.</b> Press <kbd>B</kbd>, pick <b>House</b>, click a free hex. Builders show up on
+        their own. Each house holds five people and lets the town grow.</li>
+      <li><b>Give them somewhere to pray.</b> Build an <b>Altar</b> and drop villagers on it. Worshippers
+        generate Prayer Power, which is what miracles cost.</li>
+      <li><b>Make it rain.</b> Press <kbd>1</kbd> and click a field. Watered crops grow about six times
+        faster.</li>
+      <li><b>Keep the wood coming.</b> Loose trees run out. A <b>Woodcutter's lodge</b> sprouts saplings
+        around itself so foresters never run dry.</li>
+      <li><b>Start the clock on the ages.</b> Build a <b>Library</b> and staff it. Scholars make Insight,
+        and Insight is the only way into the Bronze Age.</li>
+    </ol>
+    <div class="callout">
+      <p style="margin:0"><b>If people start starving</b>, you have too few fields or too few farmers.
+        Click a field and use the <b>+</b> button to staff it from the idle pool; the number beside it is
+        exactly how many villagers can be assigned right now.</p>
+    </div>
+  </section>
+
+  <figure class="shot"><img src="img/close.jpg" alt="A close view of the village with houses, a temple and villagers walking between them" loading="lazy"></figure>
+  <figcaption>Villagers walk real paths between jobs. They sleep at night, eat when hungry, and get
+    unhappy if any of that is missing.</figcaption>
+
+  <section id="controls">
+    <h2>Controls</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Action</th><th>Input</th></tr></thead>
+        <tbody>
+          <tr><td>Pan</td><td>Left-drag the land (grab and pull), <kbd>Shift</kbd>+drag or middle-drag anywhere, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows, or push the pointer to the screen edge</td></tr>
+          <tr><td>Rotate and tilt</td><td>Right-drag, middle-drag, <kbd>Ctrl</kbd>+drag, <kbd>Q</kbd> / <kbd>E</kbd></td></tr>
+          <tr><td>Zoom</td><td>Mouse wheel, towards the cursor</td></tr>
+          <tr><td>Pick up</td><td>Left-click a villager, tree, rock or heap inside your influence</td></tr>
+          <tr><td>Drop or throw</td><td>Release. Flick the mouse as you release to throw</td></tr>
+          <tr><td>Reward the creature</td><td>Hold the button on it and move — a stroke</td></tr>
+          <tr><td>Punish the creature</td><td>A quick tap on it</td></tr>
+          <tr><td>Cast a miracle</td><td><kbd>1</kbd>–<kbd>9</kbd> or the Miracles tab, then click. Hold <kbd>Shift</kbd> to keep casting</td></tr>
+          <tr><td>Build</td><td><kbd>B</kbd>, pick a building, click the ground. <kbd>R</kbd> rotates, <kbd>Shift</kbd> keeps placing</td></tr>
+          <tr><td>Walls and roads</td><td>Pick them in Build, then drag a line on the ground</td></tr>
+          <tr><td>Cancel</td><td>Right-click or <kbd>Esc</kbd></td></tr>
+          <tr><td>Centre on temple / creature</td><td><kbd>Space</kbd> / <kbd>F</kbd></td></tr>
+          <tr><td>Tabs</td><td><kbd>B</kbd>uild, <kbd>M</kbd>iracles, <kbd>C</kbd>reature, army <kbd>T</kbd>, trib<kbd>U</kbd>te, stats <kbd>I</kbd>, <kbd>Esc</kbd> menu</td></tr>
+          <tr><td>Creature orders</td><td><kbd>K</kbd> then click an enemy to attack; <kbd>G</kbd> then click a spot to guard</td></tr>
+          <tr><td>Hurry a villager</td><td><kbd>Alt</kbd>+click them. They work faster for a while, but it frightens them</td></tr>
+          <tr><td>Sacrifice</td><td><kbd>Alt</kbd>+drop a villager on your own altar</td></tr>
+          <tr><td>Gesture casting</td><td><kbd>Alt</kbd>+drag: circle = Water, V = Heal, zigzag = Fireball, vertical = Lightning, horizontal = Shield</td></tr>
+          <tr><td>Speed and pause</td><td><kbd>+</kbd> / <kbd>−</kbd>, <kbd>P</kbd></td></tr>
+          <tr><td>Photo mode / help</td><td><kbd>Y</kbd> hides the interface · <kbd>H</kbd> shows the controls</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:14px">Touch works too: one finger pans or grabs, two fingers pinch
+      to zoom and twist to rotate.</p>
+  </section>
+
+  <section id="villagers">
+    <h2>Villagers and jobs</h2>
+    <p>Villagers eat, sleep in houses at night, age, fall ill, and get frightened. They are never ordered
+      about directly. You give someone a job by dropping them on the thing that needs doing, or by
+      clicking a building and using its <b>+</b> and <b>−</b> buttons.</p>
+    <p>Fourteen jobs exist. Farmers, foresters, miners, builders, breeders and worshippers cover the
+      early game. A library adds <b>scholars</b>, a market <b>merchants</b>, a harbour <b>fishers</b>, a
+      herbalist <b>healers</b>, and a monastery <b>missionaries</b> and <b>emissaries</b>.</p>
+    <p><b>Auto-assign jobs</b> in the town panel lets the town manage itself. Turn it off when you want
+      full control over who does what.</p>
+    <div class="callout">
+      <p style="margin:0">The "available" count next to the assignment buttons is the exact pool the
+        <b>+</b> button draws from: idle adults and breeders, sleepers included because they get woken.
+        Children, soldiers and anyone away on a mission are never counted.</p>
+    </div>
+  </section>
+
+  <section id="skills">
+    <h2>Skills and Legends</h2>
+    <p>Every second a villager spends at a job is experience in that job. Six ranks:</p>
+    <p>
+      <span class="pill">Novice</span><span class="pill">Apprentice ~1 min</span>
+      <span class="pill">Journeyman</span><span class="pill">Expert ~9 min</span>
+      <span class="pill">Master</span><span class="pill">Legend ~25 min</span>
+    </p>
+    <p>Each rank is +12% output. A <b>Legend</b> also inspires everyone working at the same building, for
+      a further 25%. The building panel lists the crew with their ranks; the <b>+</b> button picks the
+      most experienced villager available, and <b>−</b> releases the least. Hovering a villager shows
+      their rank and what they are best at, which matters when you are reassigning people.</p>
+  </section>
+
+  <section id="building">
+    <h2>Building and adjacency</h2>
+    <p>Building is on a hex grid: one building per tile, with the grid drawn around your cursor while you
+      place. Walls, gates and roads are free-form lines you drag, and roads run <i>under</i> buildings
+      rather than competing for the tile.</p>
+    <p>Where you put something matters. Like Civilization, what sits on the six neighbouring hexes gives
+      a bonus:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Building</th><th>Likes being next to</th></tr></thead>
+        <tbody>
+          <tr><td>Field</td><td>A granary, or the water. A Terraces of Plenty anywhere in town helps every field.</td></tr>
+          <tr><td>Mine</td><td>High ground.</td></tr>
+          <tr><td>Altar</td><td>Shrines, statues and wonders. An Obelisk of Dawn in town boosts every altar.</td></tr>
+          <tr><td>House</td><td>A market or a tavern — happier residents.</td></tr>
+          <tr><td>Market</td><td>Houses and a harbour.</td></tr>
+          <tr><td>Library</td><td>An altar, and especially a monastery.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The building panel shows the bonus you are getting and what would raise it. Buildings also
+      <b>upgrade</b> through three levels: each level fills more of its hex, gains ornaments, and
+      multiplies what it does.</p>
+  </section>
+
+  <div class="grid cols-2">
+    <div>
+      <figure class="shot"><img src="img/build.jpg" alt="The build menu showing five categories of buildings with costs" loading="lazy"></figure>
+      <figcaption>Twenty-four buildings in five categories. A gold dot marks something the current age
+        just opened that you have not built yet.</figcaption>
+    </div>
+    <div>
+      <figure class="shot"><img src="img/panel.jpg" alt="A field selected, its panel listing crop progress, soil quality and the adjacency bonuses it is receiving" loading="lazy"></figure>
+      <figcaption>Select anything to see what it is doing and why. This field is up 55% on adjacency
+        alone, and the panel names each source.</figcaption>
+    </div>
+  </div>
+
+  <section id="ages">
+    <h2>Ages and Insight</h2>
+    <p>Scholars at a <b>Library</b> produce Insight, and Insight is the only thing that advances the age.
+      The top bar shows which age you are in, the meter, and how many minutes until the next one.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Age</th><th>Insight</th><th>Opens</th></tr></thead>
+        <tbody>
+          <tr><td>Stone</td><td>0</td><td>Huts, fields, a lodge, a mine, a first altar, a library</td></tr>
+          <tr><td>Bronze</td><td>90</td><td>Granary, market, harbour, herbalist</td></tr>
+          <tr><td>Iron</td><td>300</td><td>Tavern, monastery, armoury, watchtower, statue</td></tr>
+          <tr><td>Classical</td><td>650</td><td>The Great Pyramid, the Obelisk of Dawn, the Terraces of Plenty</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Each new age is worth two Tribute. Rival tribes advance with time, so a slow start means facing
+      better-equipped neighbours.</p>
+  </section>
+
+  <section id="economy">
+    <h2>The economy</h2>
+    <p>Five resources: food, wood, stone, iron and gold. Loose rocks and trees run out, so the mid game
+      is about replacing them with buildings that never do — a <b>Mine</b> beside a vein digs it forever,
+      a <b>Woodcutter's lodge</b> regrows the forest around it, a <b>Harbour</b> brings in food whatever
+      the season, and a <b>Market</b> turns surplus into gold.</p>
+    <p>Everything is stored in your temple, which holds 600 of each on its own; storehouses and granaries
+      raise the cap. Every stockpile in the town panel carries a live per-minute figure — hover it to see
+      produced and consumed separately. Press <kbd>I</kbd> for the full picture.</p>
+  </section>
+
+  <figure class="shot"><img src="img/stats.jpg" alt="The stats panel with production rates, charts of population and stockpiles, and job distribution" loading="lazy"></figure>
+  <figcaption>Thirty minutes of history, who does what, and which needs are going unmet.</figcaption>
+
+  <section id="prayer">
+    <h2>Prayer, miracles and alignment</h2>
+    <p>Worshippers at an altar generate Prayer Power. Nine miracles spend it, from Water at 60 up to a
+      Meteor at 520. You can only cast inside your influence, the ring that grows with your population
+      and how impressive your buildings are.</p>
+    <p>Miracles pull your <b>alignment</b> one way or the other. Water, Heal, Food, Siren and Shield push
+      you towards benevolence; Fireball, Lightning, Hurricane and Meteor towards malevolence — and so does
+      throwing your own people into the sea. Your temple, your hand and your creature all change
+      appearance to match, and two advisors argue about every decision.</p>
+    <p><b>Tribute</b> is the other currency: renown accrues from population, impressiveness and happiness,
+      and every 450 renown is one point. Spend it on new miracles, army types, creature upgrades and
+      divine powers.</p>
+  </section>
+
+  <section id="creature">
+    <h2>Your creature</h2>
+    <p>You pick one at the start — ape, lion, cow, wolf or tortoise — and it learns by watching. It has
+      opinions about eating trees, eating villagers, gathering wood, watering fields, fighting and
+      sleeping, and each of those is a weight that moves when you react.</p>
+    <ul class="clean">
+      <li><b>Stroke it</b> (hold and move the hand over it) to reinforce whatever it just did.</li>
+      <li><b>Tap it</b> to discourage that.</li>
+      <li><b>Feed it</b> by dropping food on it. A hungry creature makes its own decisions about food.</li>
+      <li><b>Order it</b> with <kbd>K</kbd> to attack something or <kbd>G</kbd> to guard a spot.</li>
+    </ul>
+    <p>With the Creature miracles unlock it will also learn miracles by watching you cast them nearby. It
+      grows as it gains experience, and a large well-fed creature is the single most effective thing you
+      own in a war.</p>
+  </section>
+
+  <section id="winning">
+    <h2>Winning a land</h2>
+    <p>Rival towns have a loyalty bar. Two ways to empty it:</p>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Awe</h3>
+        <p>When your influence reaches their town and you are more impressive than they are, loyalty
+          falls. Below 40% their villagers start walking over to you; at zero the whole town converts.
+          Wonders, statues, a big happy population and miracles cast nearby all help.</p>
+      </div>
+      <div class="card">
+        <h3>War</h3>
+        <p>Unlock the Armoury, train platoons of swordsmen, archers or battering rams, and march them in.
+          Walls and watchtowers hold the line at home. Taking a town by force works, but it costs you
+          alignment and the survivors take a while to believe.</p>
+      </div>
+    </div>
+    <p>A <b>Monastery</b> opens a third route. <b>Missionaries</b> walk to a rival town and preach: its
+      loyalty drops while they speak and wavering villagers convert on the spot. <b>Emissaries</b> buy
+      favour instead — at 3 the town stops raiding you, at 6 it sends gifts, at 9 it joins you
+      peacefully. Terrorising a town loses the favour you bought.</p>
+  </section>
+
+  <section id="world">
+    <h2>Weather, seasons and the world</h2>
+    <p>Each island is generated from a seed: a domain-warped coastline with bays and peninsulas, islets
+      offshore, inland lakes, mountain ridges, and nine biomes from jungle to tundra to volcanic ash.
+      Soil matters — crops grow fastest in jungle and worst in desert and alpine. Deserts hide more gold,
+      badlands more iron.</p>
+    <p>Seasons turn every two days. Winter slows crops to a crawl and burns wood to keep people warm, so
+      a full store going into it is the difference between a quiet season and a funeral. Storms start
+      fires, droughts wither crops, and rain does your watering for you.</p>
+  </section>
+
+  <section id="saves">
+    <h2>Saves and settings</h2>
+    <p>Seven save slots: a quick save on <kbd>F5</kbd> / <kbd>F9</kbd>, an autosave every two minutes, and
+      five named slots. Everything lives in your browser's local storage, or the app's own storage on
+      desktop — the two are separate.</p>
+    <p>Beyond the four-land campaign there is a <b>skirmish</b> mode: pick a seed, a map size up to
+      Colossal, and up to seven rival tribes.</p>
+  </section>
+
+  <section>
+    <div class="btns" style="justify-content:flex-start">
+      <a class="btn primary" href="play/">Play now</a>
+      <a class="btn" href="architecture.html">How it is built</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Dominion · Apache-2.0</span>
+    <nav>
+      <a href="./">Home</a>
+      <a href="play/">Play</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/guilyx/dominion">Source</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

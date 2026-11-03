@@ -30,6 +30,16 @@ jobs:
       - name: Build the portable single-file game
         run: node build.js
 
+      # The project site is assembled exactly the way the Pages workflow does it,
+      # so a broken link or an orphaned screenshot fails the PR rather than the deploy.
+      - name: Build the site and check its links
+        run: |
+          mkdir -p _site/play
+          cp -r site/. _site/
+          node build.js --out _site/play/index.html
+          cp build-assets/icon.png _site/img/icon.png
+          node tools/check-site-links.mjs _site
+
       - name: Upload the portable build
         uses: actions/upload-artifact@v4
         with:

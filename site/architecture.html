@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Dominion</title>
+<meta name="description" content="How Dominion is built: 5,800 lines of plain classic-script JavaScript on Three.js, with no build step, no runtime dependencies, instanced crowds, a seeded world, and a label-driven release pipeline.">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./">DOMINION</a>
+    <nav>
+      <a href="play/">Play</a>
+      <a href="guide.html">How to play</a>
+      <a href="architecture.html" aria-current="page">Architecture</a>
+      <a href="https://github.com/guilyx/dominion">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="tight">
+    <h1 style="font-size:36px;letter-spacing:.08em;color:var(--gold);margin:28px 0 8px">Architecture</h1>
+    <p class="lede narrow">Roughly 5,800 lines of plain JavaScript on top of Three.js. No framework, no
+      build step for the game itself, no runtime dependencies, and no binary assets.</p>
+  </section>
+
+  <section class="tight">
+    <div class="grid cols-3">
+      <div class="card"><h3>5,842</h3><p class="muted">lines across 17 source files</p></div>
+      <div class="card"><h3>0</h3><p class="muted">runtime dependencies</p></div>
+      <div class="card"><h3>1 MB</h3><p class="muted">the whole game, one HTML file</p></div>
+    </div>
+  </section>
+
+  <div class="toc">
+    <ol>
+      <li><a href="#constraints">The constraints</a></li>
+      <li><a href="#modules">Module map</a></li>
+      <li><a href="#entities">Entities and state</a></li>
+      <li><a href="#rendering">Rendering and crowds</a></li>
+      <li><a href="#world">World generation</a></li>
+      <li><a href="#sim">Simulation and pathfinding</a></li>
+      <li><a href="#saves">Save format</a></li>
+      <li><a href="#build">Build and packaging</a></li>
+      <li><a href="#ci">Testing and releases</a></li>
+    </ol>
+  </div>
+
+  <section id="constraints">
+    <h2>The constraints</h2>
+    <p>Three rules shaped everything else.</p>
+    <ul class="clean">
+      <li><b>No build step for the game.</b> <code>index.html</code> loads eighteen plain
+        <code>&lt;script&gt;</code> tags in order. Everything hangs off a single
+        <code>window.BW</code> namespace. You can open the file from disk and it runs; you can edit a
+        file and hit reload. The bundler exists only to produce the single-file distribution.</li>
+      <li><b>No external assets.</b> Every mesh, texture, sound and icon is generated at runtime from
+        code. The application icon is drawn by a hand-written PNG encoder using nothing but
+        <code>zlib</code>. That keeps the repository small and means nothing can rot or go missing.</li>
+      <li><b>No runtime dependencies.</b> Three.js is vendored (594 KB, MIT). Electron, electron-builder
+        and Playwright are development-only — they package and test, and none of them ships inside the
+        game.</li>
+    </ul>
+  </section>
+
+  <section id="modules">
+    <h2>Module map</h2>
+    <p>Load order matters, because it is plain classic scripts: utilities first, data second, then the
+      systems that need them.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Lines</th><th>Responsibility</th></tr></thead>
+        <tbody>
+          <tr><td><code>util.js</code></td><td>265</td><td>Seeded PRNG, value noise, maths, spatial hash, the A* nav grid, hex maths</td></tr>
+          <tr><td><code>data.js</code></td><td>200</td><td>Every tuning number: 24 buildings, 9 miracles, 22 unlocks, ages, adjacency, biomes, the four campaign lands</td></tr>
+          <tr><td><code>terrain.js</code></td><td>307</td><td>Island heightfield, chunked level-of-detail mesh, water, biome colouring, ray picking</td></tr>
+          <tr><td><code>gfx.js</code></td><td>897</td><td>Renderer, lights, sky, procedural mesh kits, instanced crowds, particles</td></tr>
+          <tr><td><code>world.js</code></td><td>357</td><td>Entity store, towns, resource accounting, mesh synchronisation, save and load</td></tr>
+          <tr><td><code>camera.js</code></td><td>144</td><td>God camera: zoom to cursor, edge scroll, rotate, touch</td></tr>
+          <tr><td><code>audio.js</code></td><td>211</td><td>Generative ambience and score, synthesised in the browser</td></tr>
+          <tr><td><code>people.js</code></td><td>526</td><td>Villager needs, jobs, skills, walking, fear, illness and death</td></tr>
+          <tr><td><code>buildings.js</code></td><td>323</td><td>Placement rules, construction, upgrades, adjacency, fire, towers</td></tr>
+          <tr><td><code>towns.js</code></td><td>322</td><td>Economy, births, ages, loyalty and conversion, the rival-tribe AI</td></tr>
+          <tr><td><code>miracles.js</code></td><td>165</td><td>Miracle effects and their consequences</td></tr>
+          <tr><td><code>creature.js</code></td><td>387</td><td>Creature AI, learning weights, commands, combat</td></tr>
+          <tr><td><code>army.js</code></td><td>153</td><td>Platoons, unit types, morale, raids</td></tr>
+          <tr><td><code>director.js</code></td><td>135</td><td>Seasons, weather, pacing events, the two advisors</td></tr>
+          <tr><td><code>hand.js</code></td><td>460</td><td>The divine hand, picking up and throwing, placement modes, gestures</td></tr>
+          <tr><td><code>ui.js</code></td><td>606</td><td>HUD, tabs, panels, charts, overlays</td></tr>
+          <tr><td><code>game.js</code></td><td>384</td><td>Bootstrap, land generation, the main loop, campaign flow</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="entities">
+    <h2>Entities and state</h2>
+    <p>There are no classes for game objects. Every entity — villager, building, tree, rock, creature,
+      platoon, town — is a plain object with a numeric <code>id</code>, held in a <code>Map</code> and in
+      a per-type array. Systems are free functions over that state.</p>
+    <p>The one rule that makes this work: <b>anything prefixed with an underscore is transient</b>. A
+      building's Three.js mesh lives at <code>_mesh</code>, a cached adjacency result at
+      <code>_adj</code>, a dirty flag at <code>_dirty</code>. Serialisation strips every key beginning
+      with <code>_</code>, so the save format is whatever the simulation actually needs and nothing
+      else — no manual list of fields to keep in sync.</p>
+<pre><code>// world.js — the entire save filter
+const strip = (k, v) =&gt; (k.startsWith('_') ? undefined : v);
+return JSON.stringify(data, strip);</code></pre>
+  </section>
+
+  <section id="rendering">
+    <h2>Rendering and crowds</h2>
+    <p>A town at full tilt has dozens of villagers and tens of thousands of trees. Drawing each as its
+      own mesh would be hopeless, so almost everything goes through <code>InstancedMesh</code> crowds
+      that are rebuilt per frame from state:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Crowd</th><th>Capacity</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>People</td><td>2,500</td><td>Twelve parts each, with per-part local transforms, so legs swing, tools chop and worshippers raise their arms</td></tr>
+          <tr><td>Conifers / broadleaf</td><td>20,000 each</td><td>Rebuilt only when the forest changes</td></tr>
+          <tr><td>Need icons</td><td>1,000</td><td>The little symbols above an unhappy villager</td></tr>
+          <tr><td>Rocks, items</td><td>400 each</td><td></td></tr>
+          <tr><td>Particles</td><td>8,000</td><td>One points system for smoke, sparks, rain and dust</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Buildings are the exception: each is a small <code>Group</code> of boxes, cones and cylinders
+      assembled by a <code>buildingMesh</code> function. Upgrading rebuilds the group with extra storeys
+      and ornaments, which is why a level-three building visibly fills more of its hex.</p>
+    <p>Simulation has its own level of detail. Villagers far from the camera tick every third frame with
+      a tripled delta, which keeps a large town cheap without changing its behaviour.</p>
+  </section>
+
+  <figure class="shot"><img src="img/island.jpg" alt="A wide view of the island showing terrain, forests and the town" loading="lazy"></figure>
+  <figcaption>Terrain is a chunked mesh with level of detail, built nearest-first so the ground under
+    the camera appears immediately.</figcaption>
+
+  <section id="world">
+    <h2>World generation</h2>
+    <p>Every island comes from one integer seed, through a mulberry32 PRNG and value-noise fbm. Nothing
+      is stored; the same seed rebuilds the same world exactly, which is also what makes save files
+      small.</p>
+    <ul class="clean">
+      <li><b>Coastline.</b> A radial mask whose radius is domain-warped by noise, so the shore has bays
+        and peninsulas instead of being a circle. Four seeded islets sit offshore.</li>
+      <li><b>Relief.</b> Ridged noise raises mountain spines, and a second low-frequency field carves
+        inland lakes with smoothed shores.</li>
+      <li><b>Biomes.</b> Moisture, temperature and slope fields are blended into nine weighted biomes.
+        Each contributes to ground colour, tree density, tree species, crop growth and which ores appear.</li>
+      <li><b>Town sites</b> are flattened to gentle plateaus, and each one is guaranteed stone, iron and
+        gold within reach so no start is unplayable.</li>
+    </ul>
+  </section>
+
+  <section id="sim">
+    <h2>Simulation and pathfinding</h2>
+    <p>Two spatial structures carry the load. A <b>uniform grid hash</b> (cell size 8) answers "what is
+      near this point" for the thousands of nearest-neighbour queries each second. A separate
+      <b>navigation grid</b> (cell size 3) holds walkability and movement cost.</p>
+    <p>Villagers try a straight line first and only run A* when it is blocked. Roads cost less, so people
+      prefer them and visibly move 40% faster. Buildings stamp themselves into the grid by cell centre,
+      gates are passable to their owner only, and anyone who somehow ends up inside a blocked cell is
+      allowed to walk out — without that escape rule a single mis-stamped cell can strand a villager
+      forever, which is exactly the bug it was written to fix.</p>
+    <p>The grid is rebuilt lazily: a <code>navDirty</code> flag plus a version counter, so paths
+      recompute only when the world actually changed under them.</p>
+  </section>
+
+  <section id="saves">
+    <h2>Save format</h2>
+    <p>A save is JSON in local storage: the god, the towns, the people, the buildings, the creatures, the
+      effects, the camera, the PRNG cursor and the weather. Trees are the one hand-packed structure —
+      tens of thousands of them become compact arrays rather than objects.</p>
+    <p>Loading tolerates older saves through a chain of migrations: a resource that was renamed, a field
+      that did not exist, levels added to buildings. Each is a couple of lines in
+      <code>loadState</code>, which is cheap insurance against a format that is still moving.</p>
+  </section>
+
+  <section id="build">
+    <h2>Build and packaging</h2>
+    <p><code>build.js</code> inlines the stylesheet and all eighteen scripts into
+      <code>dist/index.html</code> — about 1 MB, completely self-contained, works from
+      <code>file://</code> with no network. That single file is the browser build, the download on the
+      releases page, and the page this site serves at <a href="play/">/play/</a>.</p>
+    <p>The desktop app is an Electron shell around exactly that file. The renderer is sandboxed: no Node
+      integration, context isolation on, external links handed to the real browser, and one instance at
+      a time so two copies cannot fight over the same saves. The packaged archive contains three files
+      — the main process, the bundled game, and a manifest.</p>
+    <p>electron-builder produces an NSIS installer and a portable executable for Windows, dmg and zip for
+      both Mac architectures, and an AppImage and deb for Linux.</p>
+  </section>
+
+  <section id="ci">
+    <h2>Testing and releases</h2>
+    <p>Three suites run on every pull request.</p>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3>Static</h3>
+        <p>About a second, no browser. Every file parses, and the data tables are checked against each
+          other: no building missing from the menu, no category claiming one twice, worker slots matching
+          the upgrade levels, no unlock that nothing defines.</p>
+      </div>
+      <div class="card">
+        <h3>Smoke</h3>
+        <p>Loads the portable build from disk in headless Chromium, plays five minutes of simulated time,
+          opens every panel, and round-trips a save.</p>
+      </div>
+      <div class="card">
+        <h3>Packaged app</h3>
+        <p>Builds the Electron app and launches it for real, checking it loads the game, keeps Node out
+          of the renderer, and can write a save.</p>
+      </div>
+    </div>
+    <p style="margin-top:18px">Releases need no approval and no release pull request. Every pull request
+      carries one label — <code>release:patch</code>, <code>release:minor</code>,
+      <code>release:major</code> or <code>release:none</code> — and merging a versioned one bumps the
+      version, dates the changelog, commits and tags on <code>main</code>, builds all three platforms,
+      and publishes the release with those changelog entries as its notes. The labels create themselves
+      on first run, so the repository needs no setup.</p>
+    <div class="callout">
+      <p style="margin:0">The static suite is where cheap invariants go. It has already caught a build
+        menu entry pointing at a building that did not exist, a packaging option that was not in
+        electron-builder's schema, two installer scripts drifting from the filenames the build actually
+        produces, and a <code>.gitignore</code> pattern that silently excluded the release script.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="btns" style="justify-content:flex-start">
+      <a class="btn primary" href="https://github.com/guilyx/dominion">Read the source</a>
+      <a class="btn" href="play/">Play it</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Dominion · Apache-2.0 · Three.js is MIT</span>
+    <nav>
+      <a href="./">Home</a>
+      <a href="play/">Play</a>
+      <a href="guide.html">How to play</a>
+      <a href="https://github.com/guilyx/dominion">Source</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
