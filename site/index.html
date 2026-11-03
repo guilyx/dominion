@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dominion — a browser god game</title>
+<meta name="description" content="Rule a tribe from above. Nurture or terrorise your villagers, raise a colossal creature, and win the island by awe or by war. Plays in the browser, no install.">
+<meta property="og:title" content="Dominion — a browser god game">
+<meta property="og:description" content="Rule a tribe from above. Raise a creature, cast miracles, and win the island by awe or by war.">
+<meta property="og:image" content="img/town.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./">DOMINION</a>
+    <nav>
+      <a href="play/">Play</a>
+      <a href="guide.html">How to play</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/guilyx/dominion">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>DOMINION</h1>
+    <p class="tag">Rule a tribe from above. Nurture or terrorise your villagers, raise a colossal
+      creature, and win the island by awe or by war.</p>
+    <div class="btns">
+      <a class="btn primary" href="play/">Play in your browser<small>no install, nothing to sign up for</small></a>
+      <a class="btn" href="https://github.com/guilyx/dominion/releases/latest">Download for desktop<small>Windows · macOS · Linux</small></a>
+    </div>
+    <p class="muted" style="font-size:13px">Original code and procedural art. No external assets, no server, no tracking.</p>
+  </div>
+
+  <figure class="shot">
+    <img src="img/town.jpg" alt="A thriving village of houses, fields and temples seen from above, with the god's hand hovering over it" width="1440" height="860">
+  </figure>
+  <figcaption>A town in the Classical Age. The left panel is the economy, the top bar is your divine
+    standing, and the pale ring on the minimap is how far your influence reaches.</figcaption>
+
+  <section>
+    <h2>What it is</h2>
+    <div class="narrow">
+      <p>A god game in the spirit of the classic god-sim genre. You are an invisible deity with a giant
+        hand, a tribe of villagers who get on with their lives whether or not you help, and a creature
+        you raise by example.</p>
+      <p>You never control a villager directly. You pick them up and put them somewhere, you make it
+        rain on their crops, you build where there is room, and you decide whether the neighbouring
+        tribes are won over or flattened. Everything you do pushes you towards benevolence or
+        malevolence, and the world, your temple, your hand and your creature all change to match.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What makes it tick</h2>
+    <div class="grid cols-3">
+      <div class="card">
+        <span class="ico">🖐</span>
+        <h3>The hand</h3>
+        <p>Pick up villagers, trees, rocks and boulders. Drop them where they are useful, or throw them
+          where they are not. Stroke your creature to reward it; tap it to scold.</p>
+      </div>
+      <div class="card">
+        <span class="ico">👥</span>
+        <h3>Villagers who learn</h3>
+        <p>Every second at a job is experience in it. Six ranks from Novice to Legend, and a Legend
+          speeds up everyone working beside them.</p>
+      </div>
+      <div class="card">
+        <span class="ico">📜</span>
+        <h3>Four ages</h3>
+        <p>Scholars at a library produce Insight, which carries the tribe from the Stone Age through
+          Bronze, Iron and Classical, opening new buildings at each step.</p>
+      </div>
+      <div class="card">
+        <span class="ico">⬢</span>
+        <h3>Adjacency</h3>
+        <p>What sits on the six neighbouring hexes matters. Fields beside a granary grow faster, mines
+          on high ground yield more, altars pray harder beside a wonder.</p>
+      </div>
+      <div class="card">
+        <span class="ico">🐾</span>
+        <h3>A creature that copies you</h3>
+        <p>It watches what you do and what you reward. Feed it, and it farms. Let it eat a villager
+          once, and it may decide villagers are food.</p>
+      </div>
+      <div class="card">
+        <span class="ico">⚔</span>
+        <h3>Awe or war</h3>
+        <p>Impress a rival town and its people defect. Send missionaries to preach, emissaries to buy
+          favour, or soldiers to knock the gates down.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="grid cols-2">
+      <div>
+        <figure class="shot"><img src="img/build.jpg" alt="The build menu, showing building categories and costs" loading="lazy"></figure>
+        <figcaption>Twenty-four buildings in five categories, gated by age.</figcaption>
+      </div>
+      <div>
+        <figure class="shot"><img src="img/stats.jpg" alt="The statistics panel with per-minute production rates and charts" loading="lazy"></figure>
+        <figcaption>Every stockpile carries a live per-minute figure, produced against consumed.</figcaption>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <p class="narrow muted">The browser version needs nothing at all. For the desktop build, one command
+      does it — including clearing the macOS quarantine flag, which is otherwise a manual chore because
+      the app is not code-signed.</p>
+
+    <h3>macOS and Linux</h3>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/guilyx/dominion/main/install.sh | sh</code></pre>
+
+    <h3>Windows (PowerShell)</h3>
+<pre><code>irm https://raw.githubusercontent.com/guilyx/dominion/main/install.ps1 | iex</code></pre>
+
+    <p class="muted" style="font-size:14px">Add <code>--dry-run</code> (or <code>-DryRun</code>) to see what
+      it would do without touching anything. Or take a file straight from the
+      <a href="https://github.com/guilyx/dominion/releases/latest">latest release</a>:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Platform</th><th>File</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Windows</td><td><code>…-win-x64-setup.exe</code><br><code>…-win-x64-portable.exe</code></td><td>Installer, or a portable build that leaves nothing behind.</td></tr>
+          <tr><td>macOS</td><td><code>…-mac-arm64.dmg</code><br><code>…-mac-x64.dmg</code></td><td>Apple silicon and Intel. Unsigned, so clear the quarantine flag on first run.</td></tr>
+          <tr><td>Linux</td><td><code>…-linux-x86_64.AppImage</code><br><code>…-linux-amd64.deb</code></td><td>AppImage runs anywhere; the deb installs a launcher.</td></tr>
+          <tr><td>Anything</td><td><code>…-portable.html</code></td><td>The whole game in one file. Open it in a browser. Works offline, from a USB stick.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Run it from source</h2>
+    <p class="narrow muted">Node 18 or newer, and nothing else. The game itself has zero runtime
+      dependencies.</p>
+<pre><code>git clone https://github.com/guilyx/dominion.git
+cd dominion
+npm start          # serves the game and opens a browser</code></pre>
+    <p class="muted" style="font-size:14px">More in the <a href="architecture.html">architecture notes</a>
+      and <a href="https://github.com/guilyx/dominion/blob/main/CONTRIBUTING.md">CONTRIBUTING</a>.</p>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Dominion · Apache-2.0 · an original fan project, with no assets or text from any commercial game</span>
+    <nav>
+      <a href="play/">Play</a>
+      <a href="guide.html">How to play</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/guilyx/dominion">Source</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
