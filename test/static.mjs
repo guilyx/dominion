@@ -248,6 +248,13 @@ console.log('\nThe release machinery works');
       for (const f of ['package.json', 'package-lock.json', 'CHANGELOG.md']) copyFileSync(path.join(ROOT, f), path.join(tmp, f));
       copyFileSync(path.join(ROOT, 'scripts', 'release', 'bump.mjs'), path.join(tmp, 'scripts', 'release', 'bump.mjs'));
 
+      // Seed an entry in the copy. Straight after a release [Unreleased] is
+      // empty by design, and this check is about the machinery working, not
+      // about whether there happens to be something to ship today — the next
+      // check covers the empty case.
+      const clTmp = path.join(tmp, 'CHANGELOG.md');
+      writeFileSync(clTmp, readFileSync(clTmp, 'utf8').replace('## [Unreleased]\n', '## [Unreleased]\n\n### Added\n\n- A seeded entry, so there is something to release.\n'));
+
       const out = execFileSync(process.execPath, ['scripts/release/bump.mjs', 'minor', '--date', '2026-01-31'],
         { cwd: tmp, encoding: 'utf8' }).trim();
       const [maj, min] = pkg.version.split('.').map(Number);

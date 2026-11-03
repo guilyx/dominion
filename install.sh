@@ -1,7 +1,7 @@
 #!/bin/sh
 # Dominion installer for macOS and Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/guilyx/dominion/main/install.sh | sh
 #
 # Downloads the latest release build for this machine and installs it. On macOS
 # it also clears the download quarantine, which is the step people otherwise
@@ -13,7 +13,7 @@
 #   --dry-run         print what would be downloaded and installed, then stop
 set -eu
 
-REPO="${DOMINION_REPO:-guilyx/black_and_white}"   # overridable so forks and tests can point elsewhere
+REPO="${DOMINION_REPO:-guilyx/dominion}"   # overridable so forks and tests can point elsewhere
 PREFIX="${DOMINION_PREFIX:-$HOME/.local/bin}"
 VERSION="${DOMINION_VERSION:-}"
 DRY_RUN=0
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
       cat <<'USAGE'
 Dominion installer for macOS and Linux.
 
-  curl -fsSL https://raw.githubusercontent.com/guilyx/black_and_white/main/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/guilyx/dominion/main/install.sh | sh
 
 Options (after `| sh -s --`, or when running the script directly):
   --version X.Y.Z   install a specific version instead of the latest
