@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-03
+
 ### Fixed
 
 - A release now republishes the site, so `/play/` serves the version that was just cut.
@@ -78,7 +80,8 @@ All notable changes to this project are documented here. The format follows
 - The Windows installer and portable build no longer write to the same filename.
 - The package licence matches `LICENSE` (Apache-2.0).
 
-[Unreleased]: https://github.com/guilyx/dominion/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/guilyx/dominion/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/guilyx/dominion/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/guilyx/dominion/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/guilyx/dominion/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/guilyx/dominion/releases/tag/v1.1.0
